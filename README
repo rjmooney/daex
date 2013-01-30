@@ -3,7 +3,7 @@ DAEX - The Digital Audio EXtractor README
 
 For more information on DAEX, mail "rmooney@iss.net"...
 
-Current version: .01alpha
+Current version: .02a
 
 Minimal documentation until I get more time. :)
 
@@ -24,6 +24,9 @@ usage: daex [-d device] [-o outfile] [-s drive_speed] [-t track_no]
    -t track_no    :  The track number to extract. (default: 1)
 
 The drive speed option isn't implemented.  Currently, it defaults to 4x.
+
+The audio file is stored as a 2 channel, 16-bit, 44100hz WAVE.  This should
+be somewhat configurable in the near future.  Bear with me.
 
 This is an ALPHA version of the software.  This is not by far the final 
 release.  If you have ideas that you'd like to see in future updates of the 

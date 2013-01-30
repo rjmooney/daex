@@ -1,0 +1,18 @@
+-----------------------------------------
+DAEX, the Digital Audio EXtractor History
+-----------------------------------------
+
+.01a  -  First release, 04/30/98
+
+.02a  -  Second release, 05/01/98
+      -  Cleaned up the code a bit, fixed a memory leak.
+      -  Commented quite a bit.
+      -  Seperated the #defines out of "daex.c", and gave them their
+         own header, "daex.h"
+      -  Added the FreeBSD standard disclaimer to "daex.c", "daex.h", and
+         "format.h"
+      -  Created the HISTORY and TODO lists.
+      -  Added a bit more error checking.
+      -  Running DAEX without any options no longer attempts to record a
+         track- instead the usage banner is displayed.
+

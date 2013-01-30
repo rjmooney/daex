@@ -1,28 +1,94 @@
-/* daex.c - Extracts CDDA from an ATAPI CD-ROM and saves in the WAVE
- *          audio format.  Attempts to correct errors by re-reading
- *          a block up to 10 times before failing.
+/*
+ * Copyright (c) 1998 Robert Mooney
+ * All rights reserved.
  *
- * This package, all included text and source are
- * (c) Copyright 1998 Robert Mooney, All rights reserved.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+ * DAEX   - The Digital Audio EXtractor
  * 
- * Written by Robert Mooney <rmooney@iss.net>, v.01a 04/26/98
+ * daex.c - Extracts digital audio from an ATAPI CD-ROM and saves it in the 
+ *          WAVE audio format.  Attempts to correct errors by re-reading a
+ *          block up to 10 times before failing.
+ *
+ * Written by Robert Mooney <rmooney@iss.net>, 04/26/98
+ *                              Last modified, 05/01/98
  *
  */
 
-#undef DEBUG			/* define for DEBUG mode */
-
 #include <stdio.h>
 #include <sys/cdio.h>
+#include <sys/errno.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <strings.h>
+#include "daex.h"
 #include "format.h"
 
-#define kVersion  ".01a"	/* Current working version of DAEX */
 
-void fnUsage(char **argv) {
+/*========================================================================*/
+void fnError(int iExitCode, char *szError, ...)
+/*
+ * Display a string describing the error, and exit with the specified
+ * status.
+ *
+ *    Input:  szError   - The error string to be displayed.
+ *            iExitCode - The exit status code of our error.
+ *  Returns:  None.
+ */
+/*========================================================================*/
+{
+  va_list stArgumentList;
+  char *pBuffer;
+
+  if ((pBuffer = calloc(1, DAEX_MAX_STRING_LEN)) == NULL) {
+    fprintf(stderr, "Unable to allocate memory for argument buffer.\n");
+    exit(2);
+  }
+
+  va_start(stArgumentList, szError);
+  vsnprintf(pBuffer, DAEX_MAX_STRING_LEN, szError, stArgumentList);
+  va_end(stArgumentList);
+
+  if (szError != NULL)
+    fprintf(stderr, "%s", pBuffer);
+
+  free(pBuffer);
+
+  exit(iExitCode);
+}
+
+/*========================================================================*/
+void fnUsage(char **pArguments) 
+/*
+ * Displays information on how to use DAEX from the command line.
+ *
+ *   Input:  pArguments - A pointer to the application arguments.
+ * Returns:  None.
+ */
+/*========================================================================*/
+{
   fprintf(stderr, "usage: daex [-d device] [-o outfile] [-s drive_speed] [-t track_no]\n\n");
   fprintf(stderr, "   -d device      :  ATAPI CD-ROM device. (default: /dev/wcd0c)\n");
   fprintf(stderr, "   -o outfile     :  The name of the recorded track. (default: output.wav)\n");
@@ -30,34 +96,118 @@ void fnUsage(char **argv) {
   fprintf(stderr, "                     (default: max) (ex. 4 = 4x (706kb/sec)\n");
   fprintf(stderr, "   -t track_no    :  The track number to extract. (default: 1)\n\n");
 
-  exit(1);
+  exit(DAEX_EXIT_STATUS);
 }
+
+
+/*========================================================================*/
+void fnSetupWAVEheader(void *pvWavHeader, u_long lTotalFileLength, 
+                       u_long lTotalBytesWritten)
+/*
+ * Create the Wave header.  If "lFileLength" and "lTotalBytesWritten" are
+ * both 0, we'll assume we're just initializing the structure.  Otherwise,
+ * we've (hopefully) finished recording the audio, and need to tidy up the
+ * header so Wave decoders will actually process the file.
+ *
+ *   Input:  pvWavHeader - Pointer to a structure containing the Wave header
+ *                         fields.
+ *           lFileLength - The total file length of the output file, including
+ *                         the Wave header.
+ *           lTotalBytesWritten - The number of bytes of raw audio written
+ *                                to the output file.
+ *
+ * Returns:  None.
+ */
+/*========================================================================*/
+{
+  struct WavFormat_t *pstWavHeader;
+
+  pstWavHeader = (struct WavFormat_t *)pvWavHeader;
+
+  if ((lTotalFileLength == 0) && (lTotalBytesWritten == 0)) {
+    strncpy(pstWavHeader->sRiffHeader,   "RIFF", 4);
+    strncpy(pstWavHeader->sWavHeader,    "WAVE", 4);
+    strncpy(pstWavHeader->sFormatHeader, "fmt ", 4);
+    strncpy(pstWavHeader->sDataHeader,   "data", 4);
+
+    pstWavHeader->lFileLength     = 0;     /* We don't know the filelength   */
+    pstWavHeader->lFormatLength   = 0x10;  /* Length of the format data (16) */
+    pstWavHeader->nFormatTag      = 0x01;  /* PCM header                     */
+    pstWavHeader->nChannels       = 2;     /* 1 = mono, 2 = stereo           */
+    pstWavHeader->lSampleRate     = 44100; /* Sample rate in Khz             */
+    pstWavHeader->nBitsPerSample  = 16;    /* Bits per sample 8,12,16        */
+
+    /* Block alignment */
+    pstWavHeader->nBlockAlign     = (pstWavHeader->nChannels *
+                                     pstWavHeader->nBitsPerSample / 8);
+    /* Bytes per second */
+    pstWavHeader->lBytesPerSecond = (pstWavHeader->lSampleRate * 
+                                     pstWavHeader->nBlockAlign);
+    /* Length of the data block */
+    pstWavHeader->lSampleLength   = 0;
+
+  } else {
+
+   /* We have the final file length information, so we'll fill that in
+    * here.  We subtract 8 bytes from lTotalFileLength to account for the 
+    * RIFF file header, and the RIFF file length field.
+    */
+
+    pstWavHeader->lFileLength   = lTotalFileLength - 8;
+    pstWavHeader->lSampleLength = lTotalBytesWritten;
+  }
+}
+
 
 void main(int argc, char **argv)
 {
-  int iCount, iError, iErrorRecoveryCount, iFileDesc, iBytesWritten, 
-      iOutfileDesc, iPrintedFlag = 0;
-  int iLBAstart, iLBAend;
-  struct ioc_toc_header stTOCheader;
-  struct ioc_read_toc_entry stTOCentry;
-  struct cd_toc_entry *pstTOCentryData;
-  struct ioc_drive_speed stDriveSpeed;
-  struct ioc_play_track stPlayList;
-  struct ioc_read_cdda stReadCDDA;
-  struct WavFormat_t stWavHeader;
-  u_long lTotalBytesWritten = 0;
-  char *pszBuffer;
-  char szTotalBytesWritten[512];
-  int iBlocksToExtract, iCurrentBlock;
-  u_long lPercentileMark, lTotalFileLength;
-  u_short nPercent;
-  extern char *optarg;
-  extern int optind;
-  int iArgument, iTrackNumber;
-  char *szDeviceName, *szOutputFilename;
+  struct  ioc_toc_header     stTOCheader;	/* Table of Contents header  */
+  struct  ioc_read_toc_entry stTOCentry;	/* Individual TOC entry      */
+  struct  ioc_drive_speed    stDriveSpeed;	/* Drive speed structure     */
+  struct  ioc_read_cdda      stReadCDDA;	/* CDDA (raw audio) struct   */
+  struct  WavFormat_t        stWavHeader;	/* Wave header               */
+  struct  cd_toc_entry       *pstTOCentryData;  /* List of TOC entries       */
+
+  int     iArgument,		/* Current argument in getopt()'s arg list   */
+          iBlocksToExtract,     /* Number of blocks a track will span        */
+          iBytesWritten,        /* Number of bytes written on a write()      */
+          iCount,		/* Temporary counter                         */
+          iCurrentBlock,	/* The block number we're current reading    */
+          iError,		/* Return status from the various calls      */
+          iErrorRecoveryCount,	/* Counter for the error recovery mechanism  */
+          iFileDesc,		/* File descriptor for the input device      */
+          iLBAend,		/* Ending Logical Block Address for a track  */
+          iLBAstart,		/* Starting LBA for a track                  */
+          iOutfileDesc,		/* File descriptor for the output file(s)    */
+          iTrackNumber;		/* The current track number being extracted  */
+
+  int     iPrintedFlag = 0; 	/* Used in determining how to print errors   */
+
+  u_long  lPercentileMark, 	/* LBA division used to determine % complete */
+          lTotalFileLength;	/* The total file length, including headers  */
+  u_long  lTotalBytesWritten = 0; /* Total bytes written thus far            */
+
+  u_short nPercent;		/* Percent of the extraction completed       */
+
+  char    szTotalBytesWritten[512];	/* String used to display the status */
+  char    *pszBuffer,			/* Raw CDDA buffer                   */
+          *szDeviceName,		/* Input device name                 */
+          *szOutputFilename;		/* Output file name                  */
+
+  extern int  optind;		/* The current argument number - getopt()    */
+  extern char *optarg;		/* Current option's arg. string - getopt()   */
+
 
   printf("DAEX v%s - The Digital Audio EXtractor.\n", kVersion);
   printf("(c) Copyright 1998 Robert Mooney, All rights reserved.\n\n");
+
+  /* If there are no arguments, alert the user, display the usage banner, 
+   * and exit. 
+   */
+  if (argc == 1) {
+    fprintf(stderr, "daex: requires at least 1 argument\n");
+    fnUsage(argv);
+  }
 
   /* Get the command line arguments */
   while ((iArgument = getopt(argc, argv, "d:o:s:t:")) != -1)
@@ -79,7 +229,6 @@ void main(int argc, char **argv)
        fnUsage(argv);                /* Display the usage banner, and exit */
    }
 
-
   /* If there were more arguments than acceptable options,
    * display the usage banner, and exit.
    */
@@ -100,16 +249,12 @@ void main(int argc, char **argv)
     szOutputFilename = strdup("output.wav");
 
   /* Attempt to open the CD-ROM device.  Exit upon failure. */
-  if ((iFileDesc = open(szDeviceName, O_RDONLY)) < 0) {
-    fprintf(stderr, "Unable to open CDROM device.\n");
-    exit(1);
-  }
+  if ((iFileDesc = open(szDeviceName, O_RDONLY)) < 0)
+    fnError(DAEX_EXIT_STATUS, "Unable to open CDROM device.\n");
 
   /* Attempt to read the disc's Table Of Contents.  Exit upon failure. */
-  if ((iError = ioctl(iFileDesc, CDIOREADTOCHEADER, &stTOCheader)) < 0) {
-    fprintf(stderr, "Unable to read TOC header.\n");
-    exit(1);
-  }
+  if ((iError = ioctl(iFileDesc, CDIOREADTOCHEADER, &stTOCheader)) < 0)
+    fnError(DAEX_EXIT_STATUS, "Unable to read TOC header.\n");
 
   printf("Available tracks: %i thru %i.\n\n", stTOCheader.starting_track,
                                               stTOCheader.ending_track);
@@ -121,10 +266,8 @@ void main(int argc, char **argv)
    * the disc, alert the user, and exit.
    */
   if ((iTrackNumber < stTOCheader.starting_track) ||
-      (iTrackNumber > stTOCheader.ending_track)) {
-    fprintf(stderr, "The track number you specified is not within the proper range.\n");
-    exit(1);
-  }
+      (iTrackNumber > stTOCheader.ending_track))
+    fnError(DAEX_EXIT_STATUS, "The track number you specified is not within the proper range.\n");
 
   /* Setup the TOC entry structure to return data in the Logical Block
    * Address format.  Include the starting and finishing tracks on return
@@ -139,80 +282,56 @@ void main(int argc, char **argv)
    * If there's no enough memory available, exit.
    */
 
-  if ((pstTOCentryData = (struct cd_toc_entry *)calloc(1, stTOCentry.data_len)) == NULL) {
-    fprintf(stderr, "Unable to allocate sufficient memory for TOC entry data.\n");
-    exit(1);
-  }
+  if ((pstTOCentryData = (struct cd_toc_entry *)calloc(1, stTOCentry.data_len)) == NULL)
+    fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for TOC entry data.\n");
 
   stTOCentry.data = pstTOCentryData;
 
   /* Attempt to read the individual track information.  Exit upon failure. */
-  if ((iError = ioctl(iFileDesc, CDIOREADTOCENTRYS, &stTOCentry)) < 0) {
-    fprintf(stderr, "Unable to read TOC entries.\n");
-    exit(1);
-  }
+  if ((iError = ioctl(iFileDesc, CDIOREADTOCENTRYS, &stTOCentry)) < 0)
+    fnError(DAEX_EXIT_STATUS, "Unable to read TOC entries.\n");
 
   /* Convert the starting and ending LBA's to host-byte order */
   iLBAstart = ntohl(stTOCentry.data[iTrackNumber - 1].addr.lba);
   iLBAend   = ntohl(stTOCentry.data[iTrackNumber].addr.lba);
 
-  printf("Extracting track #%i to \"%s\" at 4x (706kb/sec)...\n", iTrackNumber, szOutputFilename);
+  /* free the memory used for the TOC entry array */
+  free(pstTOCentryData);
 
 /*  sDriveSpeed.speed = 176; */
 /*  stDriveSpeed.speed = 353; */
   stDriveSpeed.speed = 706;
 
   /* Attempt to set the drive's read speed.  Exit upon failure. */
-  if ((iError = ioctl(iFileDesc, CDIOSETSPEED, &stDriveSpeed)) < 0) {
-    fprintf(stderr, "Unable to set drive speed.\n");
-    exit(1);
-  }
+  if ((iError = ioctl(iFileDesc, CDIOSETSPEED, &stDriveSpeed)) < 0)
+    fnError(DAEX_EXIT_STATUS, "Unable to set drive speed.\n");
 
   /* Attempt to allocate memory for the raw audio data that will be read
    * from the disc.
    */
-  if ((pszBuffer = (char *)calloc(1, 2352)) == NULL) {
-    fprintf(stderr, "Unable to allocate memory for CDDA buffer.\n");
-    exit(1);
-  }
+  if ((pszBuffer = (char *)calloc(1, CDDA_DATA_LENGTH)) == NULL)
+    fnError(DAEX_EXIT_STATUS, "Unable to allocate memory for CDDA buffer.\n");
 
   /* Open the output file.  Exit upon failure. */
-  if ((iOutfileDesc = open(szOutputFilename, O_WRONLY | O_CREAT, 0644)) < 0) {
-    fprintf(stderr, "Unable to open output file, \"%s\"...\n", szOutputFilename);
-    exit(1);
+  if ((iOutfileDesc = open(szOutputFilename, O_WRONLY | O_CREAT | O_EXCL, 0644)) < 0) {
+    if (errno == EEXIST)
+      fnError(DAEX_EXIT_STATUS, "The output file \"%s\" already exists.\n", szOutputFilename);
+     else
+      fnError(DAEX_EXIT_STATUS, "Unable to open output file, \"%s\"...\n", szOutputFilename);
   }
 
-  /* Setup the RIFF/WAVE header */
-  strncpy(stWavHeader.sRiffHeader,   "RIFF", 4);
-  strncpy(stWavHeader.sWavHeader,    "WAVE", 4);
-  strncpy(stWavHeader.sFormatHeader, "fmt ", 4);
-  strncpy(stWavHeader.sDataHeader,   "data", 4);
+  printf("Extracting track #%i to \"%s\" at 4x (706kb/sec)...\n", iTrackNumber, szOutputFilename);
 
-  stWavHeader.lFileLength     = 0;       /* We don't know the filelength yet */
-  stWavHeader.lFormatLength   = 0x10;    /* Length of the format data (16)   */
-  stWavHeader.nFormatTag      = 0x01;    /* PCM header                       */
-  stWavHeader.nChannels       = 2;       /* 1 = mono, 2 = stereo             */
-  stWavHeader.lSampleRate     = 44100;   /* Sample rate in Khz               */
-  stWavHeader.nBitsPerSample  = 16;      /* Bits per sample 8,12,16          */
-
-  /* Block alignment */
-  stWavHeader.nBlockAlign     = (stWavHeader.nChannels *
-                                 stWavHeader.nBitsPerSample / 8);
-  /* Bytes per second */
-  stWavHeader.lBytesPerSecond = (stWavHeader.lSampleRate * 
-                                 stWavHeader.nBlockAlign);
-  /* Length of the data block */
-  stWavHeader.lSampleLength   = 0;
+  /* Initialize the Wave header */
+  fnSetupWAVEheader(&stWavHeader, 0, 0);
 
   /* Write the audio header to the output file.  Exit upon error.  */
-  if (write(iOutfileDesc, &stWavHeader, sizeof(struct WavFormat_t)) != sizeof(struct WavFormat_t)) {
-    fprintf(stderr, "Unable to write audio header.\n");
-    exit(1);
-  }
+  if (write(iOutfileDesc, &stWavHeader, sizeof(struct WavFormat_t)) != sizeof(struct WavFormat_t))
+    fnError(DAEX_EXIT_STATUS, "Unable to write audio header.\n");
 
   /* Setup the CDDA-read structure. */
   stReadCDDA.frames = 1;              /* Number of 2352 byte blocks to read */
-  stReadCDDA.buffer = pszBuffer;      /* Copy the buffer point              */
+  stReadCDDA.buffer = pszBuffer;      /* Copy the buffer pointer            */
 
   /* Initialize the status variables for use during extraction */
   iBlocksToExtract = (iLBAend - iLBAstart);
@@ -252,20 +371,17 @@ void main(int argc, char **argv)
      * so it's possible this method will go away in the future.
      */ 
 
-    if (iErrorRecoveryCount >= 10) {
-      fprintf(stderr, "Unable to recover from error, giving up.  Maybe the disc is scratched?\n");
-      exit(1);
-    }
+    if (iErrorRecoveryCount >= 10)
+      fnError(DAEX_EXIT_STATUS, "Unable to recover from error, giving up.  Maybe the disc is scratched?\n");
 
     /* Write the returned buffer of raw data to disk.  If not all 2352
      * bytes were written to disk, display an error message and exit...
      * otherwise,  increment the the iTotalBytesWritten counter. 
      */
 
-    if ((iBytesWritten = write(iOutfileDesc, pszBuffer, 2352)) != 2352) {
-      fprintf(stderr, "Incorrect number of bytes written to output file (%i of %i).\n", iBytesWritten, 2352);
-      exit(1);
-    }
+    if ((iBytesWritten = write(iOutfileDesc, pszBuffer, CDDA_DATA_LENGTH)) != CDDA_DATA_LENGTH)
+      fnError(DAEX_EXIT_STATUS, "Incorrect number of bytes written to output file (%i of %i).\n", iBytesWritten, CDDA_DATA_LENGTH);
+
     lTotalBytesWritten += iBytesWritten;
 
     /* Update the status line.  Allow 50 horizontal characters. */
@@ -295,13 +411,16 @@ void main(int argc, char **argv)
    */
   lTotalFileLength = lTotalBytesWritten + sizeof(struct WavFormat_t);
 
-  /* Fix up the file headers */
-  stWavHeader.lFileLength   = lTotalFileLength - 8;
-  stWavHeader.lSampleLength = lTotalBytesWritten;
+  /* Fix up the Wave file headers */
+  fnSetupWAVEheader(&stWavHeader, lTotalFileLength, lTotalBytesWritten);
 
-  /* Seek to the begining of the output file and rewrite the audio header */
-  lseek(iOutfileDesc, 0, SEEK_SET);
-  write(iOutfileDesc, &stWavHeader, sizeof(struct WavFormat_t));
+  /* Seek to the begining of the output file */
+  if (lseek(iOutfileDesc, 0, SEEK_SET) < 0)
+    fnError(DAEX_EXIT_STATUS, "Unable to seek begining of output file.\n");
+
+  /* ... and rewrite the audio header */
+  if (write(iOutfileDesc, &stWavHeader, sizeof(struct WavFormat_t)) != sizeof(struct WavFormat_t))
+    fnError(DAEX_EXIT_STATUS, "Unable to write audio header.\n");
 
   /* Close the device and output files */
   close(iOutfileDesc);

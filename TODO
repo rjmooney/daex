@@ -1,0 +1,24 @@
+The DAEX todo list... feel free to mail me any additional features you'd
+like to see added.  I can be reached at "rmooney@iss.net".
+
+? Choose another name for the output datafile if it exists.
+- CDDB for disc title and track names.
+- Full disc extraction from the command line.
+- Recommended software/how-to for creating mp3's.
+- Pointers to useful information about CDROMs
+- THANKS text, including sources for WAVE format.
+- Man pages.
+- SUID root operation
+- Check if track specified is actually a data track, notify the user if so,
+  and ask them if they'd like to continue.
+
+  - Once options like the above start making it into DAEX (those which
+    require the user to enter yes/no, etc...), add an option to assume
+    "Yes" for all.
+
+- CVS.
+- Output file name size limits
+- "CDDA_DATA_LENGTH" field -> kernel patches (cdio.h)
+- Clean up the source, make it bit more readable.
+- Check for stray variables.
+- Undersampling, channel conversion, etc.

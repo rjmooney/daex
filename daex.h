@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998 Robert Mooney
+ * Copyright (c) 1988 Robert Mooney
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,31 +23,19 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * DAEX      - The Digital Audio EXtractor
+ * DAEX   - The Digital Audio EXtractor
  * 
- * format.h  - Headers for various audio file formats
- * 
- * Written by Robert Mooney <rmooney@iss.net>, 04/26/98
+ * daex.h - Header for the DAEX package.
+ *
+ * Written by Robert Mooney <rmooney@iss.net>, 05/01/98
  *                              Last modified, 05/01/98
  */
 
-struct WavFormat_t {
-  u_char   sRiffHeader[4];     /* RIFF chunk header                 */
-  u_long   lFileLength;        /* (lFileLength - 8)                 */
-
-  u_char   sWavHeader[4];      /* WAV chunk header                  */
-
-  u_char   sFormatHeader[4];   /* Sample format header              */
-  u_long   lFormatLength;      /* Length of format data (16 bytes)  */
-  u_short  nFormatTag;         /* Format tag, 1 = PCM               */
-  u_short  nChannels;          /* Channels, 1 = mono, 2 = stereo    */
-  u_long   lSampleRate;        /* Sample rate (hz)                  */
-  u_long   lBytesPerSecond;    /* (lSampleRate * nBlockAlign)       */
-  u_short  nBlockAlign;        /* (nChannels * nBitsPerSample / 8 ) */
-  u_short  nBitsPerSample;     /* Bits per sample, 8 or 16          */
-
-  u_char   sDataHeader[4];     /* Data chunk header                 */
-  u_long   lSampleLength;      /* Sample data length                */
-};
+#undef DEBUG                            /* define for DEBUG mode           */
+#define DAEX_EXIT_STATUS        1       /* exit with this code upon error  */
+#define DAEX_MAX_STRING_LEN     1024    /* maximum string length           */
+#define CDDA_DATA_LENGTH        2352    /* CDDA data segment size          */
+   
+#define kVersion                ".02a"  /* current working version of DAEX */
 
 /* EOF */
