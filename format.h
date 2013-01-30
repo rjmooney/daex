@@ -27,9 +27,10 @@
  * 
  * format.h  - Headers for various audio file formats
  * 
- * $Id: format.h,v 0.0.3.1 1998/05/11 04:26:08 rmooney Exp $
+ * $Id: format.h,v 0.1 1998/10/11 04:38:46 rmooney Exp $
  */
 
+/* WAV format */
 struct WavFormat_t {
   u_char   sRiffHeader[4];     /* RIFF chunk header                 */
   u_long   lFileLength;        /* (lFileLength - 8)                 */

@@ -1,124 +1,124 @@
-DAEX - The Digital Audio EXtractor README
-(c) Copyright 1998 Robert Mooney, All rights reserved.
+                           Digital Audio EXtractor
 
-DAEX is freeware.
+                         DAEX Current version: 0.90a
+         DAEX (c) Copyright 1998 Robert Mooney, All rights reserved.
 
-Written by Robert Mooney <rmooney@iss.net>, 04/98
-Current version: 0.4a, 05/24/98
+------------------------------------------------------------------------
+Digital Audio EXtractor (DAEX)
+------------------------------------------------------------------------
+The Digital Audio EXtractor, or DAEX, extracts digital audio from an
+IDE-ATAPI CD-ROM which can then be saved as a PCM WAV file. As long as your
+drive supports CDDA (CD Digital Audio), you should have no problems getting
+DAEX to run.
 
-=============================================================================
-DAEX -- Disclaimer
-=============================================================================
+DAEX is freeware. You may distribute it freely in it's original form.
 
-Neither I, nor the contributors take responsibilty for mishaps that may
-result from use of DAEX.  I'll make every effort to help people out with any 
-trouble related to DAEX they may have, but I can't guarantee the absolute 
-satisfaction of every user.
+Send me your comments! I can be reached at rmooney@iss.net.
 
-Also, I realize there are issues concerning the piracy of audio tracks.  I
-would strongly recommend using DAEX for something other than piracy.
+------------------------------------------------------------------------
+System requirements
+------------------------------------------------------------------------
+DAEX currently supports the following platforms:
 
-For more information on DAEX, mail "rmooney@iss.net"...
+  FreeBSD 2.2.6 -> 3.0
 
+Patches (see Patch Downloads) are available for the following platforms:
 
-=============================================================================
-DAEX -- Application files
-=============================================================================
+ FreeBSD 2.2.6-RELEASE and 2.2.7-RELEASE
+ FreeBSD 3.0-CURRENT (as of 3.0-19980804-SNAP -- also works under 
+                      FreeBSD 3.0-RELEASE)
 
-You should be able to compile the binaries immediately after you've 
-uncompressed the archive - it's quite possible, however, that the Makefile 
-included in the distribution will require some minor modification.
+------------------------------------------------------------------------
+Patch downloads
+------------------------------------------------------------------------
+Current patch revision: 1.0
 
-To extract, and compile DAEX, enter the following:
+DAEX kernel patches may be obtained at:
 
-	tar xfz daex_0.4a.tgz
-	cd daex_0.4a
-	make
+http://eng.iss.net/~rmooney/projects/cdda.html
 
-To install DAEX, enter the following as root: 
+------------------------------------------------------------------------
+Patch installation
+------------------------------------------------------------------------
+To install the ATAPI modifications to your FreeBSD kernel, follow below. The
+example used a FreeBSD 2.2.6 system:
 
-	make install
+   earthtone:~# whoami
+   root
+   earthtone:~# patch -p < atapimods_1.0_freebsd2.2.6-release.patch
 
-DAEX is installed set-UID root, so that it may access your CD-ROM device.
-If this isn't acceptable to you, you can simply remove the SUID bit, or
-change the group/owner permissions to fit your requirements.  DAEX (obviously)
-must still be able to access the CD-ROM.
+At this point, the following files are modified:
+
+   /usr/src/sys/i386/isa/atapi.h
+   /usr/src/sys/sys/cdio.h
+   /usr/include/sys/cdio.h
+   /usr/src/sys/i386/isa/wcd.c
+
+Once you have installed the above patch file, you will need to recompile the
+kernel. It is _strongly_ recommended you back-up your current running
+version of the kernel. An example follows.
+
+First, back-up your current version of the kernel:
+
+   earthtone:~# cd /
+   earthtone:/# cp kernel kernel.nodaex
+
+Next, recompile, and install the resulting kernel:
+
+   earthtone:/# cd /usr/src/sys/i386/conf
+   earthtone:/usr/src/sys/i386/conf# config GENERIC
+   Kernel build directory is ../../compile/GENERIC
+   earthtone:/usr/src/sys/i386/conf# cd ../../compile/GENERIC
+   earthtone:/usr/src/sys/compile/GENERIC# make depend
+   earthtone:/usr/src/sys/compile/GENERIC# make
+   earthtone:/usr/src/sys/compile/GENERIC# make install
+
+Finally, reboot the system:
+
+   earthtone:/usr/src/sys/compile/GENERIC# reboot
+
+If you encounter any errors, please feel free to drop me a note. Please
+include any relevant information that will help me debug the problem.
+
+------------------------------------------------------------------------
+DAEX Installation
+------------------------------------------------------------------------
+
+You should be able to compile the source immediately after you've
+uncompressed the archive. However, it is possible that the Makefile included
+in the distribution will require minor modifications.
+
+To extract, and compile DAEX, enter the following (the bold face indicates
+what you should enter):
+
+  earthtone:~$ tar xfz daex.tgz
+  earthtone:~$ cd daex
+  earthtone:~/daex$ make
+
+To install DAEX, enter the following as root:
+
+  earthtone:~/daex# make install
+
+DAEX is installed set-UID root, so that it may access your CD-ROM device. If
+this isn't acceptable, you may remove the SUID bit, or change the
+owner/group permissions to fit your requirements. DAEX (obviously) must
+still be able to access the CD-ROM.
 
 You should now be able to begin extraction.
 
+------------------------------------------------------------------------
+DAEX Caveats
+------------------------------------------------------------------------
 
-=============================================================================
-DAEX -- Usage
-=============================================================================
+DAEX does not currently support jitter correction (though, it should by the
+first major release).
 
-usage: daex [-d device] [-o outfile] [-s drive_speed] [-t track_no]
+This alpha version does not support multiple matches from the CDDB server.
+I hope to have this feature in before beta.  Silly, but I haven't had a
+whole lot of time to spend on it. :(
 
-   -d device      :  ATAPI CD-ROM device. (default: /dev/wcd0c)
-   -o outfile     :  The name of the recorded track. (default: output.wav)
-   -s drive_speed :  The speed at which the CD audio will be read.
-                     (default: don't attempt to set drive speed)
+------------------------------------------------------------------------
+DAEX Manual page
+------------------------------------------------------------------------
 
-                       -s 0 == Maximum allowable
-                       -s 1 == 1x (176 kbytes/sec)
-                       -s 2 == 2x (353 kbytes/sec)
-                       -s 3 == 3x (528 kbytes/sec)
-                       -s 4 == 4x (706 kbytes/sec)
-
-   -t track_no    :  The track number to extract. (default: 1)
-
-The device option attempts to have DAEX read from the specified device
-instead of the default.
-
-The outfile option sets the name of the file which will be used to store
-the extracted digital audio.
-
-The drive speed option will change the rate at which data is read from the 
-disc.  This is useful when you seem to be getting alot of retry messages.
-Decreasing the drive speed will sometimes help.
-
-The track number specifies the track you'd like to extract.
-
-
-=============================================================================
-DAEX -- Examples
-=============================================================================
-
-Example 1:  
-==========
-
-To copy track 4 to "04_bottom.wav" at 4x, you would enter:
-
-	daex -t 4 -o 04_bottom.wav -s 4
-
-
-Example 2:
-==========
-
-To copy track 2 to "02_lucky.wav" at the maximum speed your drive will
-support, you would enter:
-
-	daex -t 2 -o 02_lucky.wav
-
-
-Example 3:
-==========
-
-To copy track 11 to "11_speechless.wav" at 1x, using the second IDE CD-ROM
-device, you would enter:
-
-	daex -t 11 -o 11_speechless.wav -d /dev/wcd1c -s 1
-
-
-=============================================================================
-DAEX -- Notes
-=============================================================================
-
-The audio file is stored as a 2 channel, 16 bit, 44.1Khz WAVE.  This should
-be somewhat configurable in the near future.  Bear with me.
-
-This is not by far the final release.  If you have ideas that you'd like 
-to see in future updates of the software, let me know.  I'm definately 
-interested in hearing from you.
-
-I think that's all.  Let me know if you find any bugs.  They suck.
-
+For more information and usage, see daex(1).

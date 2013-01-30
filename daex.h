@@ -27,26 +27,72 @@
  * 
  * daex.h - Header for the DAEX package.
  *
- * $Id: daex.h,v 0.5 1998/05/24 09:46:03 rmooney Exp $
+ * $Id: daex.h,v 0.14 1998/10/13 20:41:38 rmooney Exp $
  */
 
-#undef DEBUG				/* define for DEBUG mode           */
+#include <stdio.h>
+#include <sys/cdio.h>
+#include <sys/ioctl.h>
+#include <sys/errno.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <strings.h>
 
-#define CDDA_DATA_LENGTH	2352	/* CDDA data segment size          */
+#undef  DEBUG				/* Define for DEBUG mode                   */
 
-#define CDIO_PRE_EMPHASIS       0x01    /* ON: premphasis, OFF: no premphasis */
-#define CDIO_DATA_TRACK         0x04    /* ON: data track, OFF: audio track   */
-#define CDIO_COPY_PERMITTED     0x02    /* ON: allow copy, OFF: copy protect  */
-#define CDIO_FOUR_CHANNEL       0x08    /* ON: 4 channel, OFF: 2 channel      */
+#define CDDA_DATA_LENGTH	2352	/* CDDA data segment size                  */
+#define MAX_FILENAME_LENGTH     255     /* Max filename length defined by POSIX    */
+
+#define CDIO_PRE_EMPHASIS       0x01    /* ON: premphasis, OFF: no premphasis      */
+#define CDIO_DATA_TRACK         0x04    /* ON: data track, OFF: audio track        */
+#define CDIO_COPY_PERMITTED     0x02    /* ON: allow copy, OFF: copy protect       */
+#define CDIO_FOUR_CHANNEL       0x08    /* ON: 4 channel, OFF: 2 channel           */
    
-#define DAEX_EXIT_STATUS	1	/* exit with this code upon error  */
-#define DAEX_MAX_STRING_LEN	1024	/* maximum string length           */
+#define kiExitStatus_General	1	/* Exit with this code upon error          */
+#define kiMaxStringLength	1024	/* Maximum string length                   */
 
-#define DAEX_HEADER_WAVE	0	/* Wave header flag              */
+#define kiHeaderWAVE		0	/* Wave header flag                        */
 
-#define DAEX_SET_PRIVILEGE	0	/* Internal set privilege flags  */
-#define DAEX_REL_PRIVILEGE	1	/* Internal release priv. flag   */
+#define kiSetPrivilege		0	/* Internal set privilege flags            */
+#define kiRelPrivilege		1	/* Internal release priv. flag             */
 
-#define kVersion		"0.4a"	/* current working version of DAEX */
+/* Data rate descriptions */
+#define kszSpeedDefault		"Default"
+#define kszSpeedMaximum		"Maximum"
+#define kszSpeed1X		"1x (176 kbytes/sec)"
+#define kszSpeed2X		"2x (353 kbytes/sec)"
+#define kszSpeed3X		"3x (528 kbytes/sec)"
+#define kszSpeed4X		"4x (706 kbytes/sec)"
+#define kszSpeed8X		"8x (1.4 Mbytes/sec)"
+#define kszSpeed16X		"16x (2.8 Mbytes/sec)"
+
+#define kszVersion		"0.90a"	     /* Current working version of DAEX    */
+
+
+/* Disc structure which contains pointers to commonly used structures and variables
+ * within DAEX.
+ */
+struct DiscInformation_t {
+  struct ioc_toc_header     *pstTOCheader;   /* Table of Contents header           */
+  struct ioc_read_toc_entry *pstTOCentries;  /* Track entries' header              */
+  struct CDDBinformation_t  *pstCDDBinformation; /* Disc information structure     */
+  struct TrackInformation_t *pstTrackData;   /* Individual track information       */
+
+  char *szDriveSpeed;                        /* Drive speed description string     */
+};
+
+/* Track structure which contains various information used in the extraction
+ * of the specified tracks.
+ */
+struct TrackInformation_t {
+  int iTrackNumber;                 /* The track number to extract                 */
+  char *szTrackFilename;            /* Track's output file name                    */
+
+  int iFixedLBA_start,              /* Track's starting LBA                        */
+      iFixedLBA_end;                /* Track's ending LBA                          */
+};
 
 /* EOF */

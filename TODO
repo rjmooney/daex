@@ -1,25 +1,11 @@
-=============================================================================
-DAEX -- Stuff TODO
-=============================================================================
+The DAEX TODO list:
+-------------------
 
-Feel free to mail me any additional features you'd like to see added.  I can 
-be reached at "rmooney@iss.net".
-
-Key:  -   In queue for a future release of DAEX.
-      *   Added to DAEX.
-
-- CDDB for disc title and track names.
-- Alternate filename if already exists.
-- Full disc extraction from the command line.
 - Recommended software/how-to for creating mp3's.
 - Pointers to useful information about CDROMs
 - THANKS text, including sources for WAVE format.
-- Man pages.
 - "CDDA_DATA_LENGTH" field -> kernel patches (cdio.h)
 - Undersampling, channel conversion, etc.
-
-* Check for data tracks.
-* Add CD-EXTRA support.
-* SUID root operation
-* Version control (CVS)
-* Output file name size limits
+- Check for calloc()'s without error checking
+- Jitter correction
+- Multiple track extraction

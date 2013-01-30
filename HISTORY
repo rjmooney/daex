@@ -1,6 +1,5 @@
-=============================================================================
-DAEX -- Revision history
-=============================================================================
+DAEX Revision History
+---------------------
 
 .01a  -  Released, 04/30/98
 
@@ -35,3 +34,21 @@ DAEX -- Revision history
          drive speed.  To set the maximum speed explicitly, use "-s 0".
       -  Read errors are no longer displayed unless DEBUG is defined.
       -  Minor fixes and additions.
+
+.90a  -  Released, 10/10/98
+      -  Added support for 8x and 16x reads.
+      -  Added support for CD Disc Database (CDDB) querying. (-c)
+      -  Added support for full disc extraction. (-t 0)
+      -  Added support for CDDB info files. (-i)  Useful for collection
+         indexing, or customizing the extracted audio's filenames.
+      -  Added support for skipping tracks which have errors. (-y)
+      -  DAEX now resets to maximum attainable speed after extraction, 
+         assuming the drive speed was set in the first place.
+      -  Default track names are now the format of track-NN.wav, where "NN"
+         is the current track number.
+      -  Modified constant names, added constants for drive speed descriptions.
+      -  Fixed string length checking to prevent core dumps.
+      -  Modified the track extraction's look and feel.
+      -  Added a man page.
+      -  Revamped the Makefile and README.
+      -  Revamped the DAEX homepage.

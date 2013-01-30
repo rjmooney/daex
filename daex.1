@@ -1,0 +1,190 @@
+.nr CO 1
+.ie \n(CO .TH DAEX 1 "October 5, 1998" "DAEX v0.90a"
+
+.SH NAME
+daex - extract digital audio from a device
+
+.SH SYNOPSIS
+.B daex 
+[\c
+.BI -c \ hostname:port\c
+]
+[\c
+.BI -d \ device\c
+]
+[\c
+.BI -i \ filename\c
+]
+[\c
+.BI -o \ outfile\c
+]
+[\c
+.BI -s \ drive_speed\c
+]
+[\c
+.BI -t \ track_no\c
+]
+[\c
+.B -y\c
+]
+
+.SH AVAILABILITY
+DAEX currently runs under FreeBSD.
+
+.SH DESCRIPTION
+DAEX (Digital Audio EXtractor) copies digital audio from a CD-ROM device
+and stores it in PCM WAV format.
+
+.SH OPTIONS
+.TP
+.BI -c \ hostname:port
+Enable CDDB querying.  DAEX will attempt to
+contact a CDDB server on "\c
+.I hostname\c
+" at the specified "\c
+.I port\c
+".
+
+.B Example:
+-c cddb.cddb.com:8880
+.TP
+.BI -d \ device
+DAEX will attempt to read from the specified
+device instead of the default.  Default device
+is \c
+.I /dev/wcd0c.
+
+.B Example:
+-d /dev/wcd1c
+.TP
+.BI -i \ filename
+Record CDDB information to the specified file.
+This option may only be specified in conjunction
+with the \c
+.B -c \c
+(CDDB querying) option.
+
+If a track is being extracted, CDDB-derived
+filenames are not used -- instead, the tracks are
+saved in the \c
+.I track-NN.wav \c
+format, where "NN" is equal to the current, or
+specified track number.
+
+.B Example:
+-c cddb.cddb.com:8880 -i mydisc.info
+.TP
+.BI -o \ outfile
+Store the audio in the specified file.  Default
+filenames are in the format \c
+.I track-NN.wav\c
+, where "NN" is the current, or specified track number.
+
+.B Example:
+-o mysong.wav
+.TP
+.BI -s \ drive_speed
+Set the CD-ROM's read speed to the specified rate.
+
+Values for the \c
+.I drive_speed \c
+argument are as follows:
+
+.nf
+.B 0\c
+ == Maximum allowable
+.B 1\c
+ == 1x (176 kbytes/sec)
+.B 2\c
+ == 2x (353 kbytes/sec)
+.B 3\c
+ == 3x (528 kbytes/sec)
+.B 4\c
+ == 4x (706 kbytes/sec)
+.B 8\c
+ == 8x (1.4 Mbytes/sec)
+.B 16\c
+ == 16x (2.8 Mbytes/sec)
+.fi
+
+The default is to not set the drive speed.
+
+.B Example:
+-s 4
+.TP
+.BI -t \ track_no
+Extract the specified track number.  A value of
+0 will extract the entire disc.  This option must
+must be specified, unless the \c
+.B -i \c
+option is specified as well.
+
+.B Example:
+-t 5
+.TP
+.B -y
+Skip tracks that report errors.  DAEX will exit
+by default when it comes across an error.  By
+specifying this option, DAEX will continue with
+the next track in the extraction.  This option only
+affects multi-track extraction.
+
+.SH EXAMPLES
+.TP
+.B "daex -c cddb.cddb.com:8880 -t 5 -i Genesis.We_Cant_Dance.info"
+Contact the primary CDDB server, save the returned information
+to "Genesis.We_Cant_Dance.info", and extract track 5 from the disc at
+the default speed.
+.TP
+.B "daex -c sunsite.unc.edu:8880 -t 0 -y"
+Extract the entire disc, using filenames derived from the returned CDDB 
+information.  If we encounter an error, skip the current track.
+.TP
+.B "daex -t 2 -o 02_lucky.wav"
+Extract track 2 to "02_lucky.wav" at the default rate.
+.TP
+.B "daex -t 11 -o 11_speechless.wav -d /dev/wcd1c -s 1"
+Extract track 11 to "11_speechless.wav" using the second IDE
+CD-ROM device at 1x.
+.TP
+.B "daex -t 1 -c cddb.cddb.com:8880 -o fire_in_the_hole.wav -i o9mm.info -s 0"
+Contact the primary CDDB server, save the returned information to
+"o9mm.info", and extract track 1 to "fire_in_the_hole.wav" at maximum speed.
+
+.SH NOTES
+If a track is being extracted and the \c
+.B -i \c
+option is specified, CDDB-derived filenames are not used -- 
+instead, the tracks are saved in the \c
+.I track-NN.wav \c
+format, where "NN" is equal to the current, or specified track number.
+
+Audio is stored as a 2 channel, 16 bit, 44.1 Khz WAVE.
+
+.SH ACKNOWLEDGEMENTS
+.nf
+Thanks go to the following for their contributions:
+
+ Danny Dulai <nirva@ishiboo.com>  The original CDDB infofile and testing.
+ Dave Meltzer <davem@iss.net>     Reviewing the DAEX DNS lookup code.
+ Vinnie Yesue <shinex@2600.com>   Quite a bit of testing.
+
+.fi
+.SH AUTHOR
+Robert Mooney <\c
+.I rmooney@iss.net\c
+>
+
+For more information on DAEX, visit:
+
+.I http://eng.iss.net/~rmooney/projects/cdda.html
+
+DAEX is (c) Copyright 1998 Robert Mooney, All rights reserved.
+
+.SH CAVEATS
+DAEX does not yet support jitter correction.  If you experience
+jitter (cracks and crackles in the playback), try reducing the
+speed at which the track is extracted.  This can be accomplished
+through the \c
+.B -s \c
+option.
