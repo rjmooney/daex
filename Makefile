@@ -3,7 +3,7 @@
 # DAEX - The Digital Audio EXtractor
 # (c) 1998 Robert Mooney, All rights reserved.
 #
-# For more information, mail "rmooney@iss.net"...
+# For more information, mail "rjmooney@gmail.com"...
 #
 # $Id: Makefile,v 0.9 1998/10/05 17:31:55 rmooney Exp $
 #
