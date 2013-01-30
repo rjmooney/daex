@@ -1,35 +1,124 @@
 DAEX - The Digital Audio EXtractor README
 (c) Copyright 1998 Robert Mooney, All rights reserved.
 
+DAEX is freeware.
+
+Written by Robert Mooney <rmooney@iss.net>, 04/98
+Current version: 0.3a, 05/16/98
+
+=============================================================================
+DAEX -- Disclaimer
+=============================================================================
+
+Neither I, nor the contributors take responsibilty for mishaps that may
+result from use of DAEX.  I'll make every effort to help people out with any 
+trouble related to DAEX they may have, but I can't guarantee the absolute 
+satisfaction of every user.
+
+Also, I realize there are issues concerning the piracy of audio tracks.  I
+would strongly recommend using DAEX for something other than piracy.
+
 For more information on DAEX, mail "rmooney@iss.net"...
 
-Current version: .02a
 
-Minimal documentation until I get more time. :)
+=============================================================================
+DAEX -- Application files
+=============================================================================
 
-- Extract the contents of the archive (I assume you've managed this somehow).
-- Type "make"
-- As "root", type "make install"
+You should be able to compile the binaries immediately after you've 
+uncompressed the archive - it's quite possible, however, that the Makefile 
+included in the distribution will require some minor modification.
 
-Unless you have world read permissions set on your CD-ROM device, I suggest
-running DAEX as root.  Yes, I realize DAEX could be installed SUID, but it's
-almost 4am, and like, I need sleep. :)  Operation is simple:
+To extract, and compile DAEX, enter the following:
+
+	tar xfz daex_0.3a.tgz
+	cd daex_0.3a
+	make
+
+To install DAEX, enter the following as root: 
+
+	make install
+
+DAEX is installed set-UID root, so that it may access your CD-ROM device.
+If this isn't acceptable to you, you can simply remove the SUID bit, or
+change the group/owner permissions to fit your requirements.  DAEX (obviously)
+must still be able to access the CD-ROM.
+
+You should now be able to begin extraction.
+
+
+=============================================================================
+DAEX -- Usage
+=============================================================================
 
 usage: daex [-d device] [-o outfile] [-s drive_speed] [-t track_no]
 
    -d device      :  ATAPI CD-ROM device. (default: /dev/wcd0c)
    -o outfile     :  The name of the recorded track. (default: output.wav)
    -s drive_speed :  The speed at which the CD audio will be read.
-                     (default: max) (ex. 4 = 4x (706kb/sec)
+                     (default: MAX)
+
+                       -s 1 == 1x (176 kbytes/sec)
+                       -s 2 == 2x (353 kbytes/sec)
+                       -s 3 == 3x (528 kbytes/sec)
+                       -s 4 == 4x (706 kbytes/sec)
+
    -t track_no    :  The track number to extract. (default: 1)
 
-The drive speed option isn't implemented.  Currently, it defaults to 4x.
 
-The audio file is stored as a 2 channel, 16-bit, 44100hz WAVE.  This should
+The device option attempts to have DAEX read from the specified device
+instead of the default.
+
+The outfile option sets the name of the file which will be used to store
+the extracted digital audio.
+
+The drive speed option will change the rate at which data is read from the 
+disc.  This is useful when you seem to be getting alot of retry messages.
+Decreasing the drive speed will sometimes help.
+
+The track number specifies the track you'd like to extract.
+
+
+=============================================================================
+DAEX -- Examples
+=============================================================================
+
+Example 1:  
+==========
+
+To copy track 4 to "04_bottom.wav" at 4x, you would enter:
+
+	daex -t 4 -o 04_bottom.wav -s 4
+
+
+Example 2:
+==========
+
+To copy track 2 to "02_lucky.wav" at the maximum speed your drive will
+support, you would enter:
+
+	daex -t 2 -o 02_lucky.wav
+
+
+Example 3:
+==========
+
+To copy track 11 to "11_speechless.wav" at 1x, using the second IDE CD-ROM
+device, you would enter:
+
+	daex -t 11 -o 11_speechless.wav -d /dev/wcd1c -s 1
+
+
+=============================================================================
+DAEX -- Notes
+=============================================================================
+
+The audio file is stored as a 2 channel, 16 bit, 44.1Khz WAVE.  This should
 be somewhat configurable in the near future.  Bear with me.
 
-This is an ALPHA version of the software.  This is not by far the final 
-release.  If you have ideas that you'd like to see in future updates of the 
-software, let me know.  I'm definately interested in hearing from you.
+This is not by far the final release.  If you have ideas that you'd like 
+to see in future updates of the software, let me know.  I'm definately 
+interested in hearing from you.
 
 I think that's all.  Let me know if you find any bugs.  They suck.
+

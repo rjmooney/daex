@@ -29,9 +29,7 @@
  *          WAVE audio format.  Attempts to correct errors by re-reading a
  *          block up to 10 times before failing.
  *
- * Written by Robert Mooney <rmooney@iss.net>, 04/26/98
- *                              Last modified, 05/01/98
- *
+ * $Id: daex.c,v 0.8 1998/05/17 00:39:17 rmooney Exp $
  */
 
 #include <stdio.h>
@@ -48,19 +46,24 @@
 
 
 /*========================================================================*/
-void fnError(int iExitCode, char *szError, ...)
+void 
+fnError(int iExitCode, char *szError, ...)
 /*
  * Display a string describing the error, and exit with the specified
  * status.
  *
- *    Input:  szError   - The error string to be displayed.
- *            iExitCode - The exit status code of our error.
+ *    Input:  iExitCode - The exit status code of our error.
+ *            szError   - The error string to be displayed.
  *  Returns:  None.
  */
 /*========================================================================*/
 {
-  va_list stArgumentList;
-  char *pBuffer;
+  va_list stArgumentList;			/* Variable argument list   */
+  char *pBuffer;				/* Temporary output buffer  */
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnError()\n");
+#endif
 
   if ((pBuffer = calloc(1, DAEX_MAX_STRING_LEN)) == NULL) {
     fprintf(stderr, "Unable to allocate memory for argument buffer.\n");
@@ -72,15 +75,17 @@ void fnError(int iExitCode, char *szError, ...)
   va_end(stArgumentList);
 
   if (szError != NULL)
-    fprintf(stderr, "%s", pBuffer);
+    fprintf(stderr, "%s\n", pBuffer);
 
   free(pBuffer);
 
   exit(iExitCode);
 }
 
+
 /*========================================================================*/
-void fnUsage(char **pArguments) 
+void
+fnUsage(char **pArguments) 
 /*
  * Displays information on how to use DAEX from the command line.
  *
@@ -89,11 +94,22 @@ void fnUsage(char **pArguments)
  */
 /*========================================================================*/
 {
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnUsage()\n");
+#endif
+
   fprintf(stderr, "usage: daex [-d device] [-o outfile] [-s drive_speed] [-t track_no]\n\n");
   fprintf(stderr, "   -d device      :  ATAPI CD-ROM device. (default: /dev/wcd0c)\n");
   fprintf(stderr, "   -o outfile     :  The name of the recorded track. (default: output.wav)\n");
   fprintf(stderr, "   -s drive_speed :  The speed at which the CD audio will be read.\n");
-  fprintf(stderr, "                     (default: max) (ex. 4 = 4x (706kb/sec)\n");
+  fprintf(stderr, "                     (default: MAX)\n\n");
+
+  fprintf(stderr, "                       -s 1 == 1x (176 kbytes/sec)\n");
+  fprintf(stderr, "                       -s 2 == 2x (353 kbytes/sec)\n");
+  fprintf(stderr, "                       -s 3 == 3x (528 kbytes/sec)\n");
+  fprintf(stderr, "                       -s 4 == 4x (706 kbytes/sec)\n\n");
+
   fprintf(stderr, "   -t track_no    :  The track number to extract. (default: 1)\n\n");
 
   exit(DAEX_EXIT_STATUS);
@@ -101,30 +117,434 @@ void fnUsage(char **pArguments)
 
 
 /*========================================================================*/
-void fnSetupWAVEheader(void *pvWavHeader, u_long lTotalFileLength, 
-                       u_long lTotalBytesWritten)
+void
+fnRetrieveArguments(int iArgc, char **szArgv, char **szDeviceName, 
+                    char **szOutputFilename, int *iTrackNumber, 
+                    int *iDriveSpeed)
+/*
+ * Parse the user arguments, and store them in the appropriate variables.
+ *
+ *   Input:  iArgc            - Number of arguments passed by the user.
+ *           iArgv            - Actual arguments passed the user.
+ *           szDeviceName     - Device from which the audio will be read.
+ *           szOutputFilename - File to which the audio will be written.
+ *           iTrackNumber     - Track number to extract.
+ *           iDriveSpeed      - Device read speed indicator.
+ *
+ * Returns:  szDeviceName, szOutputFilename, iTrackNumber, iDriveSpeed
+ */
+/*========================================================================*/
+{
+  extern int  optind;		/* The current argument number - getopt()    */
+  extern char *optarg;		/* Current option's arg. string - getopt()   */
+  int iArgument;		/* Current argument in getopt()'s arg list   */
+
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnRetrieveArguments()\n");
+#endif
+
+  /* If there are no arguments, alert the user, display the usage banner, 
+   * and exit. 
+   */
+  if (iArgc == 1) {
+    fprintf(stderr, "daex: requires at least 1 argument\n");
+    fnUsage(szArgv);
+  }
+
+  /* Get the command line arguments */
+  while ((iArgument = getopt(iArgc, szArgv, "d:o:s:t:")) != -1) {
+
+    /* Make sure we're dealing with an argument that's at least 
+     * somewhat sane.
+     */
+    if (strlen(optarg) > DAEX_MAX_STRING_LEN)
+      fnError(DAEX_EXIT_STATUS, "The argument specified, \"%s\", exceeds the maximum string length (%i characters).", optarg, DAEX_MAX_STRING_LEN);
+
+    switch(iArgument) {
+      case 'd':				/* Device name                        */
+        if ((*szDeviceName = strdup(optarg)) == NULL)
+          fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for the device name.");
+        break;
+
+      case 'o':				/* Output filename                    */
+        if ((*szOutputFilename = strdup(optarg)) == NULL)
+          fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for the output file name.");
+        break;
+
+      case 's':				/* Drive speed                        */
+        *iDriveSpeed = atoi(optarg);
+
+        /* Don't allow whacked speeds */
+        if (*iDriveSpeed <= 0)
+          fnError(DAEX_EXIT_STATUS, "The speed must be a positive integer.");
+
+        break;
+
+      case 't':				/* Track number                       */
+        *iTrackNumber = atoi(optarg);
+
+        /* Don't allow whacked track numbers */
+        if (*iTrackNumber <= 0)
+          fnError(DAEX_EXIT_STATUS, "The track number must be a positive integer.");
+
+        break;
+
+      case '?':
+      default:
+        fnUsage(szArgv);		/* Display the usage banner, and exit */
+    }
+  }
+
+  /* If there were more arguments than acceptable options,
+   * display the usage banner, and exit.
+   */
+  if (iArgc != optind)  fnUsage(szArgv);
+}
+
+
+/*========================================================================*/
+void
+fnSanitizeArguments(char **szDevice, char **szOutputFile, int *iTrack)
+/*
+ * Check the specified values, and decide whether or not to use the defaults.
+ *
+ *   Input:  szDevice     - CD-ROM device name (path).
+ *           szOutputFile - File where data will be written.
+ *           iTrack       - The track being extracted.
+ *
+ * Returns:  None.
+ */
+/*========================================================================*/
+{
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnSanitizeArguments()\n");
+#endif
+
+  /* If no device name is specified, we'll default to "/dev/wcd0c" */
+  if (*szDevice == NULL)
+    if ((*szDevice = strdup("/dev/wcd0c")) == NULL)
+      fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for the device name.");
+
+  /* If no output filename is specified, we'll default to "output.wav" */
+  if (*szOutputFile == NULL)
+    if ((*szOutputFile = strdup("output.wav")) == NULL)
+      fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for the output file name.");
+
+  /* If the track number wasn't specified, we'll default to track 1 */
+  if (*iTrack == 0)  *iTrack = 1;
+}
+
+
+/*========================================================================*/
+void
+fnSetPrivileges(int iType, int *utSavedUID)
+/*
+ * Set or relinquish super user privileges based on the type (iType)
+ * specified.
+ *
+ *   Input:  iType      - Indicates the operation to perform: set or 
+ *                        relinquish.
+ *           utSavedUID - The original UID.  Required to fall back once
+ *                        we're done with our extended privileges.
+ *
+ * Returns:  None.
+ */
+/*========================================================================*/
+{
+
+  uid_t   utCurrentEUID;	/* Current Effective UserID                  */
+#ifdef DEBUG
+  uid_t   utCurrentUID;		/* Current UserID                            */
+#endif
+
+  switch(iType) {
+   case DAEX_SET_PRIVILEGE:			/* Gain privileges           */
+
+     /* Save the current UserID and Effective UserID so that we can first
+      * establish, and then relinquish our superuser privileges after opening 
+      * the CD-ROM device.
+      */
+
+     *utSavedUID = getuid();
+     utCurrentEUID = geteuid();
+
+#ifdef DEBUG
+     fprintf(stderr, "UID (before setuid())       : %ld\n", *utSavedUID);
+     fprintf(stderr, "EUID (before setuid())      : %ld\n\n", utCurrentEUID);
+#endif
+
+     /* Set our UID to the EUID.  Should be 0 (root).  Exit if we encounter 
+      * an error.
+      */
+     if (setuid(utCurrentEUID) < 0)
+       fnError(DAEX_EXIT_STATUS, "Unable to extended privileges - setuid() failed.");
+
+#ifdef DEBUG
+     utCurrentUID = getuid();
+     utCurrentEUID = geteuid();
+
+     fprintf(stderr, "UID (after setuid())        : %ld\n", utCurrentUID);
+     fprintf(stderr, "EUID (after setuid())       : %ld\n\n", utCurrentEUID);
+#endif
+
+     break;
+
+   case DAEX_REL_PRIVILEGE:			/* Relinquish privileges     */
+
+     /* Reset our UID to the original (saved) value.  Exit if we encounter
+      * an error.
+      */
+     if (setuid(*utSavedUID) < 0)
+       fnError(DAEX_EXIT_STATUS, "Unable to return previous privileges - setuid() failed.");
+
+#ifdef DEBUG
+     utCurrentUID = getuid();
+     utCurrentEUID = geteuid();
+
+     fprintf(stderr, "UID (after open())          : %ld\n", utCurrentUID);
+     fprintf(stderr, "EUID (after open())         : %ld\n\n", utCurrentEUID);
+#endif
+
+     break;
+
+   default:
+     fnError(DAEX_EXIT_STATUS, "Unknown privilege type.  Hmm.  You shouldn't be seeing this.");
+  }
+}
+
+
+/*========================================================================*/
+int
+fnOpenDevice(char *szDeviceName)
+/*
+ * Attempt to open the CD-ROM device, and return the file descriptor on
+ * success.  Exit upon failure.
+ *
+ *   Input:  szDeviceName - Pointer to the name of the device.
+ * Returns:  The open device descriptor.
+ */
+/*========================================================================*/
+{
+  int iFileDesc;				/* Temporary file descriptor */
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnOpenDevice()\n");
+#endif
+
+  if ((iFileDesc = open(szDeviceName, O_RDONLY)) < 0)
+    fnError(DAEX_EXIT_STATUS, "Unable to open CDROM device.");
+
+  return iFileDesc;
+}
+
+
+/*========================================================================*/
+void
+fnReadTOCheader(int iFileDesc, void *pvTOCheader, int iTrack)
+/*
+ * Attempt to read the disc's Table Of Contents, and determine if the 
+ * the user specified a valid track.  Exit upon failure.
+ *
+ *   Input:  iFileDesc   - CD-ROM device file descriptor.
+ *           pvTOCheader - Pointer to the Table of Contents header.
+ *           iTrack      - Track the user wishes to extract.
+ *
+ * Returns: None.
+ */
+/*========================================================================*/
+{
+  struct ioc_toc_header *stTOCheader;		/* Table of Contents header  */
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnReadTOCheader()\n");
+#endif
+
+  stTOCheader = (struct ioc_toc_header *)pvTOCheader;
+
+  /* Attempt to read the disc's Table Of Contents.  Exit upon failure. */
+  if (ioctl(iFileDesc, CDIOREADTOCHEADER, stTOCheader) < 0)
+    fnError(DAEX_EXIT_STATUS, "Unable to read TOC header.");
+
+  fprintf(stderr, "Available tracks: %i thru %i.\n\n", stTOCheader->starting_track,
+                                                       stTOCheader->ending_track);
+
+  /* If the track number specified is not within the range of tracks on
+   * the disc, alert the user, and exit.
+   */
+  if ((iTrack < stTOCheader->starting_track) ||
+      (iTrack > stTOCheader->ending_track))
+    fnError(DAEX_EXIT_STATUS, "The track number you specified is not within the proper range.");
+}
+
+
+/*========================================================================*/
+void
+fnReadTOCentry(int iFileDesc, void *pvTOCheader, int iTrack, int *iLBAstart, 
+               int *iLBAend)
+/*
+ * Attempt to read the TOC entries for each track into the array 
+ * "pstTOCentryData".  Since the number of tracks differs from disc to disc,
+ * we'll need to dynamically allocate memory for this array.  Once we've read
+ * the entries, check to see if the last track is a data track - if so, we're
+ * dealing with a CD-EXTRA disc, and need to adjust the last _audio_ track's
+ * ending LBA.  See the comments below.
+ *
+ *   Input:  iFileDesc   - CD-ROM device file descriptor.
+ *           pvTOCheader - Pointer to the Table of Contents header.
+ *           iTrack      - Track the user wishes to extract.
+ *           iLBAstart   - The starting LBA for the current track.
+ *           iLBAend     - The ending LBA for the current track.
+ *
+ * Returns:  iLBAstart, iLBAend
+ */
+/*========================================================================*/
+{
+  struct ioc_read_toc_entry stTOCentry;		/* Individual TOC entry      */
+  struct ioc_toc_header     *stTOCheader;	/* Table of Contents header  */
+  struct cd_toc_entry       *pstTOCentryData;	/* List of TOC entries       */
+
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnReadTOCentry()\n");
+#endif
+
+  stTOCheader = (struct ioc_toc_header *)pvTOCheader;
+
+  /* Setup the TOC entry structure to return data in the Logical Block
+   * Address format.  Include the starting and finishing tracks on return.
+   */
+  stTOCentry.address_format = CD_LBA_FORMAT;
+  stTOCentry.starting_track = stTOCheader->starting_track;
+  stTOCentry.data_len       = (stTOCheader->ending_track + 1)
+                              * sizeof(struct cd_toc_entry);
+
+  /* Attempt to allocate space for the individual track information.
+   * If there's no enough memory available, exit.
+   */
+  if ((pstTOCentryData = (struct cd_toc_entry *)calloc(1, stTOCentry.data_len)) == NULL)
+    fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for TOC entry data.");
+
+  stTOCentry.data = pstTOCentryData;
+
+  /* Attempt to read the individual track information.  Exit upon failure. */
+  if (ioctl(iFileDesc, CDIOREADTOCENTRYS, &stTOCentry) < 0)
+    fnError(DAEX_EXIT_STATUS, "Unable to read TOC entries.");
+
+  /* If the specified track is a data track, alert the user and exit.  */
+  if (stTOCentry.data[iTrack - 1].control & CDIO_DATA_TRACK)
+    fnError(DAEX_EXIT_STATUS, "The track you specified appears to be a data track.");
+
+  /* Convert the starting and ending LBA's to host-byte order */
+  *iLBAstart = ntohl(stTOCentry.data[iTrack- 1].addr.lba);
+  *iLBAend   = ntohl(stTOCentry.data[iTrack].addr.lba);
+
+  /* If we're working with a multi-session CD-EXTRA disc, adjust the
+   * the ending block address to account for the transition area.  We
+   * figure approximately 2.5 minutes for the gap.
+   *
+   * 11250 sectors = (2.5 min) * (60 sec/min) * (75 sectors/sec)
+   */
+  if ((iTrack != stTOCheader->ending_track) && 
+      (stTOCentry.data[iTrack].control & CDIO_DATA_TRACK)) {
+     *iLBAend -= 11250;
+  }
+
+  /* free the memory used for the TOC entry array */
+  free(pstTOCentryData);
+}
+
+
+/*========================================================================*/
+void *
+fnSetSpeed(int iFileDesc, int iSpeed)
+/*
+ * Attempt to set the drive's read speed.
+ *
+ *   Input:  iFileDesc - Descriptor of the CD-ROM device.
+ *           iSpeed    - The speed of the drive (1 == 1X, 2 == 2X, etc...)
+ * Returns:  None.
+ */
+/*========================================================================*/
+{
+  struct ioc_drive_speed stDriveSpeed;	/* Drive speed structure            */
+  char *szDriveSpeed;			/* Current drive speed description  */
+
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnSetSpeed()\n");
+#endif
+
+  switch (iSpeed) {
+    case 1:
+      stDriveSpeed.speed = 176;			/* 1X, or 176 kbytes/sec    */
+      if ((szDriveSpeed = strdup("1x (176 kbytes/sec)")) == NULL)
+        fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for drive speed string.");
+      break;
+
+    case 2:
+      stDriveSpeed.speed = 353;			/* 2X, or 353 kbytes/sec    */
+      if ((szDriveSpeed = strdup("2x (353 kbytes/sec)")) == NULL)
+        fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for drive speed string.");
+      break;
+
+    case 3:
+      stDriveSpeed.speed = 528;			/* 3X, or 528 kbytes/sec    */
+      if ((szDriveSpeed = strdup("3x (528 kbytes/sec)")) == NULL)
+        fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for drive speed string.");
+      break;
+
+    case 4:
+      stDriveSpeed.speed = 706;			/* 4X, or 706 kbytes/sec    */
+      if ((szDriveSpeed = strdup("4x (706 kbytes/sec)")) == NULL)
+        fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for drive speed string.");
+      break;
+
+    default:
+      stDriveSpeed.speed = 0xffff;		/* Maximum drive speed      */
+      if ((szDriveSpeed = strdup("maximum speed")) == NULL)
+        fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for drive speed string.");
+  }
+
+  /* Attempt to set the drive's read speed.  Exit upon failure. */
+  if (ioctl(iFileDesc, CDIOSETSPEED, &stDriveSpeed) < 0)
+    fnError(DAEX_EXIT_STATUS, "Unable to set drive speed.");
+
+  return szDriveSpeed;
+}
+
+
+/*========================================================================*/
+void 
+fnSetupWAVEheader(void *pvWavHeader, u_long lFileLength, 
+                  u_long lBytesWritten)
 /*
  * Create the Wave header.  If "lFileLength" and "lTotalBytesWritten" are
  * both 0, we'll assume we're just initializing the structure.  Otherwise,
  * we've (hopefully) finished recording the audio, and need to tidy up the
  * header so Wave decoders will actually process the file.
  *
- *   Input:  pvWavHeader - Pointer to a structure containing the Wave header
- *                         fields.
- *           lFileLength - The total file length of the output file, including
- *                         the Wave header.
- *           lTotalBytesWritten - The number of bytes of raw audio written
- *                                to the output file.
+ *   Input:  pvWavHeader   - Pointer to a structure containing the Wave header
+ *                           fields.
+ *           lFileLength   - The total file length of the output file, 
+ *                           including the Wave header.
+ *           lBytesWritten - The number of bytes of raw audio written
+ *                           to the output file.
  *
  * Returns:  None.
  */
 /*========================================================================*/
 {
-  struct WavFormat_t *pstWavHeader;
+  struct WavFormat_t *pstWavHeader;		/* Wave header               */
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnSetupWAVEheader()\n");
+#endif
 
   pstWavHeader = (struct WavFormat_t *)pvWavHeader;
 
-  if ((lTotalFileLength == 0) && (lTotalBytesWritten == 0)) {
+  if ((lFileLength == 0) && (lBytesWritten == 0)) {
     strncpy(pstWavHeader->sRiffHeader,   "RIFF", 4);
     strncpy(pstWavHeader->sWavHeader,    "WAVE", 4);
     strncpy(pstWavHeader->sFormatHeader, "fmt ", 4);
@@ -153,198 +573,140 @@ void fnSetupWAVEheader(void *pvWavHeader, u_long lTotalFileLength,
     * RIFF file header, and the RIFF file length field.
     */
 
-    pstWavHeader->lFileLength   = lTotalFileLength - 8;
-    pstWavHeader->lSampleLength = lTotalBytesWritten;
+    pstWavHeader->lFileLength   = lFileLength - 8;
+    pstWavHeader->lSampleLength = lBytesWritten;
   }
 }
 
 
-void main(int argc, char **argv)
-{
-  struct  ioc_toc_header     stTOCheader;	/* Table of Contents header  */
-  struct  ioc_read_toc_entry stTOCentry;	/* Individual TOC entry      */
-  struct  ioc_drive_speed    stDriveSpeed;	/* Drive speed structure     */
-  struct  ioc_read_cdda      stReadCDDA;	/* CDDA (raw audio) struct   */
-  struct  WavFormat_t        stWavHeader;	/* Wave header               */
-  struct  cd_toc_entry       *pstTOCentryData;  /* List of TOC entries       */
-
-  int     iArgument,		/* Current argument in getopt()'s arg list   */
-          iBlocksToExtract,     /* Number of blocks a track will span        */
-          iBytesWritten,        /* Number of bytes written on a write()      */
-          iCount,		/* Temporary counter                         */
-          iCurrentBlock,	/* The block number we're current reading    */
-          iError,		/* Return status from the various calls      */
-          iErrorRecoveryCount,	/* Counter for the error recovery mechanism  */
-          iFileDesc,		/* File descriptor for the input device      */
-          iLBAend,		/* Ending Logical Block Address for a track  */
-          iLBAstart,		/* Starting LBA for a track                  */
-          iOutfileDesc,		/* File descriptor for the output file(s)    */
-          iTrackNumber;		/* The current track number being extracted  */
-
-  int     iPrintedFlag = 0; 	/* Used in determining how to print errors   */
-
-  u_long  lPercentileMark, 	/* LBA division used to determine % complete */
-          lTotalFileLength;	/* The total file length, including headers  */
-  u_long  lTotalBytesWritten = 0; /* Total bytes written thus far            */
-
-  u_short nPercent;		/* Percent of the extraction completed       */
-
-  char    szTotalBytesWritten[512];	/* String used to display the status */
-  char    *pszBuffer,			/* Raw CDDA buffer                   */
-          *szDeviceName,		/* Input device name                 */
-          *szOutputFilename;		/* Output file name                  */
-
-  extern int  optind;		/* The current argument number - getopt()    */
-  extern char *optarg;		/* Current option's arg. string - getopt()   */
-
-
-  printf("DAEX v%s - The Digital Audio EXtractor.\n", kVersion);
-  printf("(c) Copyright 1998 Robert Mooney, All rights reserved.\n\n");
-
-  /* If there are no arguments, alert the user, display the usage banner, 
-   * and exit. 
-   */
-  if (argc == 1) {
-    fprintf(stderr, "daex: requires at least 1 argument\n");
-    fnUsage(argv);
-  }
-
-  /* Get the command line arguments */
-  while ((iArgument = getopt(argc, argv, "d:o:s:t:")) != -1)
-   switch(iArgument) {
-     case 'd':                       /* Device name                        */
-       szDeviceName = strdup(optarg);
-       break;
-     case 'o':                       /* Output filename                    */
-       szOutputFilename = strdup(optarg);
-       break;
-     case 's':                       /* Drive speed                        */
-       fprintf(stderr, "Drive speed is not implemented. Defaulting to 4x...\n");
-       break;
-     case 't':                       /* Track number                       */
-       iTrackNumber = atoi(optarg);
-       break;
-     case '?':
-     default:
-       fnUsage(argv);                /* Display the usage banner, and exit */
-   }
-
-  /* If there were more arguments than acceptable options,
-   * display the usage banner, and exit.
-   */
-  if (argc != optind)  fnUsage(argv);
+/*========================================================================*/
+void
+fnWriteAudioHeader(int iFileDesc, int iType, void *pvHeader, u_long lArg1, 
+                   u_long lArg2)
+/*
+ * Attempt to write an audio header to the output file.  Exit upon error.
+ *
+ *   Input:  iFileDesc - The output file's file descriptor.
+ *           iType     - The type of header being written.
+ *           pvHeader  - Pointer to the audio header structure.
+ *           lArg1     - Usually the total output file length (including 
+ *                       the header)
+ *           lArg2     - Usually the total number of data bytes written.
+ *
+ * Returns:  None.
+ */
+/*========================================================================*/
+{ 
+  struct  WavFormat_t  *pstWavHeader;		/* Wave header               */
 
 #ifdef DEBUG
-  printf("Device       : %s\n", szDeviceName);
-  printf("Outfile      : %s\n", szOutputFilename);
-  printf("Track number : %i\n", iTrackNumber);
+  fprintf(stderr, "\nFUNCTION: fnWriteAudioHeader()\n");
 #endif
 
-  /* If no device name is specified, we'll default to "/dev/wcd0c" */
-  if (szDeviceName == NULL)
-    szDeviceName = strdup("/dev/wcd0c");
+  switch (iType) {
+    case DAEX_HEADER_WAVE:			/* Wave header specified     */
+     pstWavHeader = (struct WavFormat_t *) pvHeader;
 
-  /* If no output filename is specified, we'll default to "output.wav" */
-  if (szOutputFilename == NULL)
-    szOutputFilename = strdup("output.wav");
+     /* Initialize the Wave header */
+     fnSetupWAVEheader(pstWavHeader, lArg1, lArg2);
 
-  /* Attempt to open the CD-ROM device.  Exit upon failure. */
-  if ((iFileDesc = open(szDeviceName, O_RDONLY)) < 0)
-    fnError(DAEX_EXIT_STATUS, "Unable to open CDROM device.\n");
+     /* If it appears the extraction has been completed (the file length
+      * and data bytes written are greater than 0), seek to the beginning of 
+      * the output file.
+      */
 
-  /* Attempt to read the disc's Table Of Contents.  Exit upon failure. */
-  if ((iError = ioctl(iFileDesc, CDIOREADTOCHEADER, &stTOCheader)) < 0)
-    fnError(DAEX_EXIT_STATUS, "Unable to read TOC header.\n");
+     if ((lArg1 > 0) && (lArg2 > 0))
+      if (lseek(iFileDesc, 0, SEEK_SET) < 0)
+        fnError(DAEX_EXIT_STATUS, "Unable to seek beginning of output file.");
 
-  printf("Available tracks: %i thru %i.\n\n", stTOCheader.starting_track,
-                                              stTOCheader.ending_track);
+     /* ... and write the audio header */
+     if (write(iFileDesc, pstWavHeader, sizeof(struct WavFormat_t)) != sizeof(struct WavFormat_t))
+       fnError(DAEX_EXIT_STATUS, "Unable to write audio header.");
 
-  /* If the track number wasn't specified, we'll default to track 1 */
-  if (iTrackNumber == 0)  iTrackNumber = 1;
+     break;
 
-  /* If the track number specified is not within the range of tracks on
-   * the disc, alert the user, and exit.
-   */
-  if ((iTrackNumber < stTOCheader.starting_track) ||
-      (iTrackNumber > stTOCheader.ending_track))
-    fnError(DAEX_EXIT_STATUS, "The track number you specified is not within the proper range.\n");
-
-  /* Setup the TOC entry structure to return data in the Logical Block
-   * Address format.  Include the starting and finishing tracks on return
-   */
-  stTOCentry.address_format = CD_LBA_FORMAT;
-  stTOCentry.starting_track = stTOCheader.starting_track;
-  stTOCentry.data_len       = (stTOCheader.ending_track + 1)
-                              * sizeof(struct cd_toc_entry);
+    default:
+      fnError(DAEX_EXIT_STATUS, "Unknown audio type.  Hmm.  You shouldn't be seeing this.");
+  }
+}
 
 
-  /* Attempt to allocate space for the individual track information.
-   * If there's no enough memory available, exit.
-   */
+/*========================================================================*/
+void
+fnExtractAudio(int iFileDesc, char *szFilename, int iLBAstart, int iLBAend)
+/*
+ * Copy the digital audio from the track specified to the output file
+ * specified.  Write headers to the output file if appropriate, and deal with 
+ * any errors we may run into.
+ *
+ *   Input:  iFileDesc  - Descriptor of the CD-ROM device.
+ *           szFilename - The file to which the output will be written.
+ *           iLBAstart  - The starting LBA for the current track.
+ *           iLBAend    - The ending LBA for the current track.
+ *
+ * Returns:  None.
+ */
+/*========================================================================*/
+{
+  struct  ioc_read_cdda	stReadCDDA;  	/* CDDA (raw audio) structure        */
+  struct  WavFormat_t	stWavHeader; 	/* Wave header                       */
 
-  if ((pstTOCentryData = (struct cd_toc_entry *)calloc(1, stTOCentry.data_len)) == NULL)
-    fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for TOC entry data.\n");
+  char    *szBuffer;		/* Raw CDDA buffer                           */
+  char    szTotalBytesWritten[512]; /* String used to display the status     */
 
-  stTOCentry.data = pstTOCentryData;
+  int     iBlocksToExtract,	/* Number of blocks a track will span        */
+          iBytesWritten,	/* Number of bytes written on a write()      */
+          iCount,		/* Temporary counter                         */
+          iErrorRecoveryCount,	/* Counter for the error recovery mechanism  */
+          iOutfileDesc;		/* File descriptor for the output file       */
 
-  /* Attempt to read the individual track information.  Exit upon failure. */
-  if ((iError = ioctl(iFileDesc, CDIOREADTOCENTRYS, &stTOCentry)) < 0)
-    fnError(DAEX_EXIT_STATUS, "Unable to read TOC entries.\n");
+  int     iCurrentBlock = 0,	/* The block number we're current reading    */
+          iPrintedFlag = 0;	/* Used in determining how to print errors   */
 
-  /* Convert the starting and ending LBA's to host-byte order */
-  iLBAstart = ntohl(stTOCentry.data[iTrackNumber - 1].addr.lba);
-  iLBAend   = ntohl(stTOCentry.data[iTrackNumber].addr.lba);
+  int     iCurrentPercentComplete,   /* Current % of extractration complete  */
+          iLastPercentComplete = -1; /* Last percent complete (marker)       */
 
-  /* free the memory used for the TOC entry array */
-  free(pstTOCentryData);
+  u_long  lTotalFileLength;	/* The total file length, including headers  */
 
-/*  sDriveSpeed.speed = 176; */
-/*  stDriveSpeed.speed = 353; */
-  stDriveSpeed.speed = 706;
+  u_long  lTotalBytesWritten = 0; /* Total bytes written thus far            */
 
-  /* Attempt to set the drive's read speed.  Exit upon failure. */
-  if ((iError = ioctl(iFileDesc, CDIOSETSPEED, &stDriveSpeed)) < 0)
-    fnError(DAEX_EXIT_STATUS, "Unable to set drive speed.\n");
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnExtractAudio()\n");
+#endif
 
   /* Attempt to allocate memory for the raw audio data that will be read
    * from the disc.
    */
-  if ((pszBuffer = (char *)calloc(1, CDDA_DATA_LENGTH)) == NULL)
-    fnError(DAEX_EXIT_STATUS, "Unable to allocate memory for CDDA buffer.\n");
+  if ((szBuffer = (char *)calloc(1, CDDA_DATA_LENGTH)) == NULL)
+    fnError(DAEX_EXIT_STATUS, "Unable to allocate memory for CDDA buffer.");
 
   /* Open the output file.  Exit upon failure. */
-  if ((iOutfileDesc = open(szOutputFilename, O_WRONLY | O_CREAT | O_EXCL, 0644)) < 0) {
+  if ((iOutfileDesc = open(szFilename, O_WRONLY | O_CREAT | O_EXCL, 0644)) < 0) {
     if (errno == EEXIST)
-      fnError(DAEX_EXIT_STATUS, "The output file \"%s\" already exists.\n", szOutputFilename);
+      fnError(DAEX_EXIT_STATUS, "The output file \"%s\" already exists.", szFilename);
      else
-      fnError(DAEX_EXIT_STATUS, "Unable to open output file, \"%s\"...\n", szOutputFilename);
+      fnError(DAEX_EXIT_STATUS, "Unable to open output file, \"%s\"...", szFilename);
   }
 
-  printf("Extracting track #%i to \"%s\" at 4x (706kb/sec)...\n", iTrackNumber, szOutputFilename);
-
-  /* Initialize the Wave header */
-  fnSetupWAVEheader(&stWavHeader, 0, 0);
-
-  /* Write the audio header to the output file.  Exit upon error.  */
-  if (write(iOutfileDesc, &stWavHeader, sizeof(struct WavFormat_t)) != sizeof(struct WavFormat_t))
-    fnError(DAEX_EXIT_STATUS, "Unable to write audio header.\n");
+  /* Write the inital header - we don't know the total file length or the
+   * number of bytes written, so we specify 0... (see fnWriteAudioHeader).
+   */
+  fnWriteAudioHeader(iOutfileDesc, DAEX_HEADER_WAVE, &stWavHeader, 0, 0);
 
   /* Setup the CDDA-read structure. */
   stReadCDDA.frames = 1;              /* Number of 2352 byte blocks to read */
-  stReadCDDA.buffer = pszBuffer;      /* Copy the buffer pointer            */
+  stReadCDDA.buffer = szBuffer;       /* Copy the buffer pointer            */
 
   /* Initialize the status variables for use during extraction */
   iBlocksToExtract = (iLBAend - iLBAstart);
-  iCurrentBlock    = 0;
-  lPercentileMark  = (iBlocksToExtract / 100);
-  nPercent         = 0;
 
   /* Read the individual blocks for the specified track.  Display a status
    * line, and attempt to recover from any errors we run into.
    */
 
   for (stReadCDDA.lba=iLBAstart; stReadCDDA.lba <= iLBAend; stReadCDDA.lba++) {
-    pszBuffer[0] = '\0';
+    szBuffer[0] = '\0';
 
     /* Reset the error recovery count for each block read */
     iErrorRecoveryCount = 0;
@@ -358,11 +720,11 @@ void main(int argc, char **argv)
 
       /* we're displaying the status, so we need to skip a line */
       if ((iErrorRecoveryCount == 0) && (iPrintedFlag == 1)) {
-        printf("\n");
+        fprintf(stderr, "\n");
         iPrintedFlag = 0;
       }
 
-      fprintf(stderr, "- retrying LBA %i -\n", stReadCDDA.lba);
+      fprintf(stderr, "-> Retrying block address %ld\n", stReadCDDA.lba);
       iErrorRecoveryCount++;
     }
 
@@ -372,30 +734,48 @@ void main(int argc, char **argv)
      */ 
 
     if (iErrorRecoveryCount >= 10)
-      fnError(DAEX_EXIT_STATUS, "Unable to recover from error, giving up.  Maybe the disc is scratched?\n");
+      fnError(DAEX_EXIT_STATUS, "Unable to recover from error, giving up.  Maybe the disc is scratched?");
 
-    /* Write the returned buffer of raw data to disk.  If not all 2352
-     * bytes were written to disk, display an error message and exit...
-     * otherwise,  increment the the iTotalBytesWritten counter. 
+    /* Write the returned buffer of raw data to disk.  If the file system is
+     * full, or if not all 2352 bytes were written to disk, display an error
+     * message and exit... otherwise, increment the "iTotalBytesWritten"
+     * counter. 
      */
 
-    if ((iBytesWritten = write(iOutfileDesc, pszBuffer, CDDA_DATA_LENGTH)) != CDDA_DATA_LENGTH)
-      fnError(DAEX_EXIT_STATUS, "Incorrect number of bytes written to output file (%i of %i).\n", iBytesWritten, CDDA_DATA_LENGTH);
+    if ((iBytesWritten = write(iOutfileDesc, szBuffer, CDDA_DATA_LENGTH)) != CDDA_DATA_LENGTH)
+      if (errno == ENOSPC)
+        fnError(DAEX_EXIT_STATUS, "\nUnable to write output file.  No space left on device.");
+      else
+        fnError(DAEX_EXIT_STATUS, "\nIncorrect number of bytes written to output file (%i of %i).", iBytesWritten, CDDA_DATA_LENGTH);
 
     lTotalBytesWritten += iBytesWritten;
 
-    /* Update the status line.  Allow 50 horizontal characters. */
-    if ((iCurrentBlock % lPercentileMark) == 0) {
+    /* Determine how far into the file we are (percentage wise).  We use the:
+     * [(x / 100) = (# blocks / total blocks) => percent complete = (x * 100)]
+     * formula.
+     */
+    iCurrentPercentComplete = (int) ((float)iCurrentBlock / 
+                                     (float)iBlocksToExtract * 100);
+
+    /* If the percentage indicator has increased since our last status update,
+     * update the status line once again.  Allow 50 horizontal characters. 
+     */
+    if (iCurrentPercentComplete > iLastPercentComplete) {
+
+      /* Update the "last known percent complete" indicator. */
+      iLastPercentComplete = iCurrentPercentComplete;
 
       /* Print 50 backspaces. */
       for (iCount=0; iCount < 50; iCount++) putc(8, stderr);
 
-      snprintf(szTotalBytesWritten, sizeof(szTotalBytesWritten), "%ld of %ld blocks written (%i%%)... ", iCurrentBlock, iBlocksToExtract, nPercent);
+      /* Display the actual status line. */
+      snprintf(szTotalBytesWritten, sizeof(szTotalBytesWritten), "%ld of %ld blocks written (%i%%)... ", iCurrentBlock, iBlocksToExtract, iCurrentPercentComplete);
       fprintf(stderr, "%-50s", szTotalBytesWritten);
-      iPrintedFlag = 1;
 
-      /* Increment the "percent complete" count */
-      nPercent++;
+      /* Set the "status line printed" flag, so that we known to print an
+       * extra linefeed if we encounter an error.
+       */
+      iPrintedFlag = 1;
     }
 
     /* Increment the current block count.  Used in determining whether or
@@ -404,35 +784,135 @@ void main(int argc, char **argv)
     iCurrentBlock++;
   }
   /* Dispose of the raw audio buffer */
-  free(pszBuffer); 
+  free(szBuffer); 
 
   /* Calculate the total file length written, including the audio
    * header.
    */
   lTotalFileLength = lTotalBytesWritten + sizeof(struct WavFormat_t);
 
-  /* Fix up the Wave file headers */
-  fnSetupWAVEheader(&stWavHeader, lTotalFileLength, lTotalBytesWritten);
+  /* Rewrite the audio header with the now known values of the total file
+   * length, and total number of bytes written.
+   */
+  fnWriteAudioHeader(iOutfileDesc, DAEX_HEADER_WAVE, &stWavHeader, 
+                     lTotalFileLength, lTotalBytesWritten);
 
-  /* Seek to the begining of the output file */
-  if (lseek(iOutfileDesc, 0, SEEK_SET) < 0)
-    fnError(DAEX_EXIT_STATUS, "Unable to seek begining of output file.\n");
-
-  /* ... and rewrite the audio header */
-  if (write(iOutfileDesc, &stWavHeader, sizeof(struct WavFormat_t)) != sizeof(struct WavFormat_t))
-    fnError(DAEX_EXIT_STATUS, "Unable to write audio header.\n");
-
-  /* Close the device and output files */
+  /* Close the output file */
   close(iOutfileDesc);
-  close(iFileDesc);
 
   /* Display the amount of data written to the output file. */
-  printf("\nWrote %ld bytes of data.\n\n", lTotalFileLength); 
+  fprintf(stderr, "\nWrote %ld bytes of data.\n\n", lTotalFileLength); 
+}
 
-  /* Dispose of the option arguments */
-  free(szDeviceName);
-  free(szOutputFilename);
+
+/*========================================================================*/
+void
+fnDispose(int iDeviceDesc, char **szDeviceName, char **szDriveSpeed, 
+          char **szOutputFilename)
+/*
+ * Close out the remaining descriptors, and free the memory we've previously
+ * allocated.
+ *
+ *   Input:  iDeviceDesc      - CD-ROM device descriptor.
+ *           szDeviceName     - CD-ROM device name (path).
+ *           szDriveSpeed     - Drive speed description.
+ *           szOutputFilename - The output file name.
+ *
+ * Returns: None.
+ */
+/*========================================================================*/
+{
+
+#ifdef DEBUG
+  fprintf(stderr, "FUNCTION: fnDispose()\n");
+#endif
+
+  /* Close the device descriptor */
+  close(iDeviceDesc);
+
+  /* Dispose of the option arguments, and the drive speed description string */
+  free(*szDeviceName);
+  free(*szDriveSpeed);
+  free(*szOutputFilename);
+}
+
+
+int
+main(int argc, char **argv)
+{
+  struct  ioc_toc_header     stTOCheader;	/* Table of Contents header  */
+
+  char    *szDriveSpeed;	/* Current drive speed description           */
+  char    *szDeviceName = NULL,		/* Input device name                 */
+          *szOutputFilename = NULL;	/* Output file name                  */
+
+  int     iDeviceDesc,		/* File descriptor for the input device      */
+          iLBAend,		/* Ending Logical Block Address for a track  */
+          iLBAstart;		/* Starting LBA for a track                  */
+
+  int     iDriveSpeed = 0,	/* CD-ROM read speed (1 == 1x, 2 == 2x, etc) */
+          iTrackNumber = 0;	/* The current track number being extracted  */
+
+  uid_t   utSavedUID;		/* Saved UserID for the current process      */
+
+
+  fprintf(stderr, "DAEX v%s - The Digital Audio EXtractor.\n", kVersion);
+  fprintf(stderr, "(c) Copyright 1998 Robert Mooney, All rights reserved.\n\n");
+
+  /* Parse the user arguments and store in the appropriate variables. */
+  fnRetrieveArguments(argc, argv, &szDeviceName, &szOutputFilename, 
+                      &iTrackNumber, &iDriveSpeed);
+
+#ifdef DEBUG
+  fprintf(stderr, "Device        (user) : %s\n", szDeviceName);
+  fprintf(stderr, "Outfile       (user) : %s\n", szOutputFilename);
+  fprintf(stderr, "Track number  (user) : %i\n\n", iTrackNumber);
+#endif
+
+  /* Setup the defaults if we're missing information */
+  fnSanitizeArguments(&szDeviceName, &szOutputFilename, &iTrackNumber);
+
+#ifdef DEBUG
+  fprintf(stderr, "Device       (fixed) : %s\n", szDeviceName);
+  fprintf(stderr, "Outfile      (fixed) : %s\n", szOutputFilename);
+  fprintf(stderr, "Track number (fixed) : %i\n\n", iTrackNumber);
+#endif
+
+  /* Set superuser privileges */
+  fnSetPrivileges(DAEX_SET_PRIVILEGE, &utSavedUID);
+
+  /* Open the CD-ROM device */
+  iDeviceDesc = fnOpenDevice(szDeviceName);
+
+  /* Relinquish superuser privileges */
+  fnSetPrivileges(DAEX_REL_PRIVILEGE, &utSavedUID);
+
+  /* Read the Table of Contents header.  We need the track number to determine
+   * the actual existance of the track.
+   */
+  fnReadTOCheader(iDeviceDesc, &stTOCheader, iTrackNumber);
+
+  /* Read the TOC entries, and grab the block information for the track. */
+  fnReadTOCentry(iDeviceDesc, &stTOCheader, iTrackNumber, &iLBAstart, &iLBAend);
+
+#ifdef DEBUG
+  fprintf(stderr, "Start block : %i\n", iLBAstart);
+  fprintf(stderr, "End block   : %i\n\n", iLBAend);
+#endif
+
+  /* Set the drive speed, and retrieve a string describing the current 
+   * setting. 
+   */
+  szDriveSpeed = (char *)fnSetSpeed(iDeviceDesc, iDriveSpeed);
+
+  fprintf(stderr, "Extracting track #%i to \"%s\" at %s...\n", iTrackNumber, szOutputFilename, szDriveSpeed);
+
+  /* Copy the audio to disk. */
+  fnExtractAudio(iDeviceDesc, szOutputFilename, iLBAstart, iLBAend);
+
+  /* Close the CD-ROM device, and free up the previously allocated memory. */
+  fnDispose(iDeviceDesc, &szDeviceName, &szDriveSpeed, &szOutputFilename);
 
   /* We're done. Yeah! */
-  printf("DAEX finished.\n");
+  fprintf(stderr, "DAEX finished.\n");
 }

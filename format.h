@@ -27,8 +27,7 @@
  * 
  * format.h  - Headers for various audio file formats
  * 
- * Written by Robert Mooney <rmooney@iss.net>, 04/26/98
- *                              Last modified, 05/01/98
+ * $Id: format.h,v 0.0.3.1 1998/05/11 04:26:08 rmooney Exp $
  */
 
 struct WavFormat_t {

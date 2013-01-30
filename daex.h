@@ -27,15 +27,26 @@
  * 
  * daex.h - Header for the DAEX package.
  *
- * Written by Robert Mooney <rmooney@iss.net>, 05/01/98
- *                              Last modified, 05/01/98
+ * $Id: daex.h,v 0.4 1998/05/15 07:52:22 rmooney Exp $
  */
 
-#undef DEBUG                            /* define for DEBUG mode           */
-#define DAEX_EXIT_STATUS        1       /* exit with this code upon error  */
-#define DAEX_MAX_STRING_LEN     1024    /* maximum string length           */
-#define CDDA_DATA_LENGTH        2352    /* CDDA data segment size          */
+#undef DEBUG				/* define for DEBUG mode           */
+
+#define CDDA_DATA_LENGTH	2352	/* CDDA data segment size          */
+
+#define CDIO_PRE_EMPHASIS       0x01    /* ON: premphasis, OFF: no premphasis */
+#define CDIO_DATA_TRACK         0x04    /* ON: data track, OFF: audio track   */
+#define CDIO_COPY_PERMITTED     0x02    /* ON: allow copy, OFF: copy protect  */
+#define CDIO_FOUR_CHANNEL       0x08    /* ON: 4 channel, OFF: 2 channel      */
    
-#define kVersion                ".02a"  /* current working version of DAEX */
+#define DAEX_EXIT_STATUS	1	/* exit with this code upon error  */
+#define DAEX_MAX_STRING_LEN	1024	/* maximum string length           */
+
+#define DAEX_HEADER_WAVE	0	/* Wave header flag              */
+
+#define DAEX_SET_PRIVILEGE	0	/* Internal set privilege flags  */
+#define DAEX_REL_PRIVILEGE	1	/* Internal release priv. flag   */
+
+#define kVersion		"0.3a"	/* current working version of DAEX */
 
 /* EOF */

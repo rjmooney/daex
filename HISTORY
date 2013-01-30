@@ -1,10 +1,10 @@
------------------------------------------
-DAEX, the Digital Audio EXtractor History
------------------------------------------
+=============================================================================
+DAEX -- Revision history
+=============================================================================
 
-.01a  -  First release, 04/30/98
+.01a  -  Released, 04/30/98
 
-.02a  -  Second release, 05/01/98
+.02a  -  Released, 05/01/98
       -  Cleaned up the code a bit, fixed a memory leak.
       -  Commented quite a bit.
       -  Seperated the #defines out of "daex.c", and gave them their
@@ -16,3 +16,16 @@ DAEX, the Digital Audio EXtractor History
       -  Running DAEX without any options no longer attempts to record a
          track- instead the usage banner is displayed.
 
+.30a  -  Released, 05/16/98
+      -  Added the ability to check for data tracks.  If the user specifies
+         a data track, DAEX will alert them and exit.
+      -  Added the ability to extract audio from a CD-EXTRA disc.
+      -  Added argument length checking, strdup() allocation checks
+      -  Fixed track number and device filename bugs
+      -  Added Concurrent Versions System (CVS)
+      -  If track number specified is less than or equal to 0, DAEX complains.
+      -  Implemented drive speeds (1x, 2x, 3x, 4x, MAX)
+      -  Cleaned up the code quite a bit
+      -  Added setuid() support.
+      -  Fixed the "percent complete" counter.
+      -  Bumped up the version number.

@@ -8,12 +8,12 @@
 
 INSTALLDIR= /usr/local/bin
 CC= gcc
-CFLAGS= -O2 -Wall -ansi
+CFLAGS= -O2
 
 all: daex
 
 clean:
-	rm -rf *.o core daex
+	rm -rf *.o core daex.core daex
 
 daex: daex.o
 	$(CC) $(CFLAGS) -o daex daex.o
@@ -22,7 +22,7 @@ daex.o: daex.c daex.h format.h
 	$(CC) -c daex.c
 
 install:
-	install -g bin -o bin -m 755 daex $(INSTALLDIR)
+	install -g bin -o root -m 4755 daex $(INSTALLDIR)
 
 backup:
 	tar cvfz daex_backup.tgz HISTORY Makefile README TODO daex.c daex.h format.h atapimods_1.0.patch
