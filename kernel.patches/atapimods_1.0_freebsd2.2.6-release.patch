@@ -1,0 +1,77 @@
+--- atapi.h.orig	Tue Apr 28 22:56:58 1998
++++ /usr/src/sys/i386/isa/atapi.h	Tue Apr 28 23:33:02 1998
+@@ -117,6 +117,8 @@
+ #define ATAPI_MODE_SELECT_BIG   0x55    /* set device parameters */
+ #define ATAPI_MODE_SENSE        0x5a    /* get device parameters */
+ #define ATAPI_PLAY_CD           0xb4    /* universal play command */
++#define ATAPI_READ_CD           0xbe    /* universal read command */
++#define ATAPI_SET_SPEED         0xbb    /* set cd-rom speed command */
+ 
+ /*
+  * Optional packet commands
+--- cdio.h.orig	Tue Apr 28 22:57:10 1998
++++ /usr/src/sys/sys/cdio.h	Tue Apr 28 23:33:19 1998
+@@ -273,4 +273,16 @@
+ 
+ #define	CDIOCCAPABILITY	_IOR('c',30,struct ioc_capability)	/*<2>*/
+ 
++struct ioc_read_cdda {
++	u_long	lba;		/* start block for read */
++	u_short	frames;		/* number of 2352 byte blocks to return */
++	void	*buffer;	/* frame buffer */
++};
++#define CDIOREADCDDA _IOWR('c', 31, struct ioc_read_cdda)
++
++struct ioc_drive_speed {
++	u_short speed;		/* drive speed in kbytes/sec */
++};
++#define CDIOSETSPEED _IOW('c', 32, struct ioc_drive_speed)
++
+ #endif /* !_SYS_CDIO_H_ */
+--- cdio.h.orig	Tue Apr 28 22:57:10 1998
++++ /usr/include/sys/cdio.h	Tue Apr 28 23:33:08 1998
+@@ -273,4 +273,16 @@
+ 
+ #define	CDIOCCAPABILITY	_IOR('c',30,struct ioc_capability)	/*<2>*/
+ 
++struct ioc_read_cdda {
++	u_long	lba;		/* start block for read */
++	u_short	frames;		/* number of 2352 byte blocks to return */
++	void	*buffer;	/* frame buffer */
++};
++#define CDIOREADCDDA _IOWR('c', 31, struct ioc_read_cdda)
++
++struct ioc_drive_speed {
++	u_short speed;		/* drive speed in kbytes/sec */
++};
++#define CDIOSETSPEED _IOW('c', 32, struct ioc_drive_speed)
++
+ #endif /* !_SYS_CDIO_H_ */
+--- wcd.c.orig	Tue Apr 28 22:57:03 1998
++++ /usr/src/sys/i386/isa/wcd.c	Tue Apr 28 23:33:33 1998
+@@ -808,6 +808,25 @@
+ 
+ 		return copyout (&data, args->data, len);
+ 	}
++	case CDIOREADCDDA: {
++		struct ioc_read_cdda *args = (struct ioc_read_cdda*) addr;
++		static u_char CDDAbuffer[2352];
++
++		if (wcd_request_wait (t, ATAPI_READ_CD, 0x04,
++		    args->lba >> 24 & 0xff, args->lba >> 16 & 0xff, args->lba >> 8 & 0xff, args->lba & 0xff,
++		    args->frames >> 16 & 0xff, args->frames >> 8 & 0xff, args->frames & 0xff,
++		    0x10, (u_char *)&CDDAbuffer[0], 2352) != 0)
++			return (EIO);
++
++		return copyout(&CDDAbuffer[0], args->buffer, 2352);
++ 	}
++	case CDIOSETSPEED: {
++		struct ioc_drive_speed *args = (struct ioc_drive_speed*) addr;
++
++		return wcd_request_wait (t, ATAPI_SET_SPEED, 0,
++			args->speed >> 8 & 0xff, args->speed & 0xff, 0, 0,
++			0, 0, 0, 0, 0, 0);
++        }
+ 	case CDIOCPLAYMSF: {
+ 		struct ioc_play_msf *args = (struct ioc_play_msf*) addr;
+ 
