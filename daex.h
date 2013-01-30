@@ -27,7 +27,7 @@
  * 
  * daex.h - Header for the DAEX package.
  *
- * $Id: daex.h,v 0.4 1998/05/15 07:52:22 rmooney Exp $
+ * $Id: daex.h,v 0.5 1998/05/24 09:46:03 rmooney Exp $
  */
 
 #undef DEBUG				/* define for DEBUG mode           */
@@ -47,6 +47,6 @@
 #define DAEX_SET_PRIVILEGE	0	/* Internal set privilege flags  */
 #define DAEX_REL_PRIVILEGE	1	/* Internal release priv. flag   */
 
-#define kVersion		"0.3a"	/* current working version of DAEX */
+#define kVersion		"0.4a"	/* current working version of DAEX */
 
 /* EOF */

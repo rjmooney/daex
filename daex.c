@@ -29,7 +29,7 @@
  *          WAVE audio format.  Attempts to correct errors by re-reading a
  *          block up to 10 times before failing.
  *
- * $Id: daex.c,v 0.8 1998/05/17 00:39:17 rmooney Exp $
+ * $Id: daex.c,v 0.9 1998/05/24 09:46:03 rmooney Exp $
  */
 
 #include <stdio.h>
@@ -103,8 +103,9 @@ fnUsage(char **pArguments)
   fprintf(stderr, "   -d device      :  ATAPI CD-ROM device. (default: /dev/wcd0c)\n");
   fprintf(stderr, "   -o outfile     :  The name of the recorded track. (default: output.wav)\n");
   fprintf(stderr, "   -s drive_speed :  The speed at which the CD audio will be read.\n");
-  fprintf(stderr, "                     (default: MAX)\n\n");
+  fprintf(stderr, "                     (default: don't attempt to set drive speed)\n\n");
 
+  fprintf(stderr, "                       -s 0 == Maximum allowable\n");
   fprintf(stderr, "                       -s 1 == 1x (176 kbytes/sec)\n");
   fprintf(stderr, "                       -s 2 == 2x (353 kbytes/sec)\n");
   fprintf(stderr, "                       -s 3 == 3x (528 kbytes/sec)\n");
@@ -176,8 +177,8 @@ fnRetrieveArguments(int iArgc, char **szArgv, char **szDeviceName,
         *iDriveSpeed = atoi(optarg);
 
         /* Don't allow whacked speeds */
-        if (*iDriveSpeed <= 0)
-          fnError(DAEX_EXIT_STATUS, "The speed must be a positive integer.");
+        if (*iDriveSpeed < 0)
+          fnError(DAEX_EXIT_STATUS, "The speed must be a positive integer greater than or equal to 0.");
 
         break;
 
@@ -477,6 +478,12 @@ fnSetSpeed(int iFileDesc, int iSpeed)
 #endif
 
   switch (iSpeed) {
+    case 0:
+      stDriveSpeed.speed = 0xffff;		/* Maximum drive speed      */
+      if ((szDriveSpeed = strdup("maximum speed")) == NULL)
+        fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for drive speed string.");
+      break;
+
     case 1:
       stDriveSpeed.speed = 176;			/* 1X, or 176 kbytes/sec    */
       if ((szDriveSpeed = strdup("1x (176 kbytes/sec)")) == NULL)
@@ -501,11 +508,15 @@ fnSetSpeed(int iFileDesc, int iSpeed)
         fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for drive speed string.");
       break;
 
-    default:
-      stDriveSpeed.speed = 0xffff;		/* Maximum drive speed      */
-      if ((szDriveSpeed = strdup("maximum speed")) == NULL)
+    default:			/* Don't attempt to set the drive speed.    */
+      if ((szDriveSpeed = strdup("default speed")) == NULL)
         fnError(DAEX_EXIT_STATUS, "Unable to allocate sufficient memory for drive speed string.");
+      return szDriveSpeed;
   }
+
+#ifdef DEBUG
+  fprintf(stderr, "IOCTL   : CDIOSETSPEED\n");
+#endif
 
   /* Attempt to set the drive's read speed.  Exit upon failure. */
   if (ioctl(iFileDesc, CDIOSETSPEED, &stDriveSpeed) < 0)
@@ -660,8 +671,11 @@ fnExtractAudio(int iFileDesc, char *szFilename, int iLBAstart, int iLBAend)
           iErrorRecoveryCount,	/* Counter for the error recovery mechanism  */
           iOutfileDesc;		/* File descriptor for the output file       */
 
-  int     iCurrentBlock = 0,	/* The block number we're current reading    */
-          iPrintedFlag = 0;	/* Used in determining how to print errors   */
+  int     iCurrentBlock = 0;	/* The block number we're current reading    */
+
+#ifdef DEBUG
+  int     iPrintedFlag = 0;	/* Used in determining how to print errors   */
+#endif
 
   int     iCurrentPercentComplete,   /* Current % of extractration complete  */
           iLastPercentComplete = -1; /* Last percent complete (marker)       */
@@ -718,13 +732,16 @@ fnExtractAudio(int iFileDesc, char *szFilename, int iLBAstart, int iLBAend)
     while ( (ioctl(iFileDesc, CDIOREADCDDA, &stReadCDDA) != 0) &&
              (iErrorRecoveryCount < 10) ) {
 
-      /* we're displaying the status, so we need to skip a line */
+#ifdef DEBUG
+      /* if we're displaying the status, we need to skip a line */
       if ((iErrorRecoveryCount == 0) && (iPrintedFlag == 1)) {
         fprintf(stderr, "\n");
         iPrintedFlag = 0;
       }
 
       fprintf(stderr, "-> Retrying block address %ld\n", stReadCDDA.lba);
+#endif
+
       iErrorRecoveryCount++;
     }
 
@@ -733,8 +750,14 @@ fnExtractAudio(int iFileDesc, char *szFilename, int iLBAstart, int iLBAend)
      * so it's possible this method will go away in the future.
      */ 
 
-    if (iErrorRecoveryCount >= 10)
-      fnError(DAEX_EXIT_STATUS, "Unable to recover from error, giving up.  Maybe the disc is scratched?");
+    if (iErrorRecoveryCount >= 10) {
+
+#ifndef DEBUG
+      fprintf(stderr, "\n");
+#endif
+
+      fnError(DAEX_EXIT_STATUS, "Too many errors encountered reading track.  Maybe the disc is scratched?  Does your drive support CDDA?");
+    }
 
     /* Write the returned buffer of raw data to disk.  If the file system is
      * full, or if not all 2352 bytes were written to disk, display an error
@@ -772,10 +795,12 @@ fnExtractAudio(int iFileDesc, char *szFilename, int iLBAstart, int iLBAend)
       snprintf(szTotalBytesWritten, sizeof(szTotalBytesWritten), "%ld of %ld blocks written (%i%%)... ", iCurrentBlock, iBlocksToExtract, iCurrentPercentComplete);
       fprintf(stderr, "%-50s", szTotalBytesWritten);
 
+#ifdef DEBUG
       /* Set the "status line printed" flag, so that we known to print an
        * extra linefeed if we encounter an error.
        */
       iPrintedFlag = 1;
+#endif
     }
 
     /* Increment the current block count.  Used in determining whether or
@@ -850,7 +875,7 @@ main(int argc, char **argv)
           iLBAend,		/* Ending Logical Block Address for a track  */
           iLBAstart;		/* Starting LBA for a track                  */
 
-  int     iDriveSpeed = 0,	/* CD-ROM read speed (1 == 1x, 2 == 2x, etc) */
+  int     iDriveSpeed = -1,	/* CD-ROM read speed (1 == 1x, 2 == 2x, etc) */
           iTrackNumber = 0;	/* The current track number being extracted  */
 
   uid_t   utSavedUID;		/* Saved UserID for the current process      */

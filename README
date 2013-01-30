@@ -4,7 +4,7 @@ DAEX - The Digital Audio EXtractor README
 DAEX is freeware.
 
 Written by Robert Mooney <rmooney@iss.net>, 04/98
-Current version: 0.3a, 05/16/98
+Current version: 0.4a, 05/24/98
 
 =============================================================================
 DAEX -- Disclaimer
@@ -31,8 +31,8 @@ included in the distribution will require some minor modification.
 
 To extract, and compile DAEX, enter the following:
 
-	tar xfz daex_0.3a.tgz
-	cd daex_0.3a
+	tar xfz daex_0.4a.tgz
+	cd daex_0.4a
 	make
 
 To install DAEX, enter the following as root: 
@@ -56,15 +56,15 @@ usage: daex [-d device] [-o outfile] [-s drive_speed] [-t track_no]
    -d device      :  ATAPI CD-ROM device. (default: /dev/wcd0c)
    -o outfile     :  The name of the recorded track. (default: output.wav)
    -s drive_speed :  The speed at which the CD audio will be read.
-                     (default: MAX)
+                     (default: don't attempt to set drive speed)
 
+                       -s 0 == Maximum allowable
                        -s 1 == 1x (176 kbytes/sec)
                        -s 2 == 2x (353 kbytes/sec)
                        -s 3 == 3x (528 kbytes/sec)
                        -s 4 == 4x (706 kbytes/sec)
 
    -t track_no    :  The track number to extract. (default: 1)
-
 
 The device option attempts to have DAEX read from the specified device
 instead of the default.

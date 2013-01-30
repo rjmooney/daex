@@ -29,3 +29,9 @@ DAEX -- Revision history
       -  Added setuid() support.
       -  Fixed the "percent complete" counter.
       -  Bumped up the version number.
+
+.40a  -  Released, 05/24/98
+      -  Default behavior for "drive_speed" no longer attempts to set the
+         drive speed.  To set the maximum speed explicitly, use "-s 0".
+      -  Read errors are no longer displayed unless DEBUG is defined.
+      -  Minor fixes and additions.
